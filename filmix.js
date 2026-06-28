@@ -420,6 +420,35 @@
         clear: function () {
             network.clear();
         },
+
+        // ── Методы, которые Lampa может вызвать (стабы) ──────────
+        img: function (path) {
+            return path || '';
+        },
+
+        menuCategory: function (params) {
+            if (params && params.onComplite) params.onComplite([]);
+        },
+
+        company: function (params) {
+            if (params && params.onComplite) params.onComplite({ results: [] });
+        },
+
+        favorite: function (params) {
+            if (params && params.onComplite) params.onComplite({ results: [] });
+        },
+
+        relise: function (params) {
+            if (params && params.onComplite) params.onComplite({ results: [] });
+        },
+
+        genres: function (onComplite) {
+            if (onComplite) onComplite([]);
+        },
+
+        collections: function (params) {
+            if (params && params.onComplite) params.onComplite({ results: [] });
+        },
     };
 
     // ─────────────────────────────────────────────────────────────
