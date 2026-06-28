@@ -122,6 +122,7 @@
             img:    poster,
 
             production_countries: (item.countries || []).map(function (c) { return { name: c }; }),
+            production_companies: [],   // Lampa читает .length без проверки
         };
 
         // method вычисляется Lampa как original_name ? 'tv' : 'movie'
