@@ -35,7 +35,7 @@
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Сетевой слой
+    // Сетевой слой (нативный fetch — Lampa.Reguest нестабилен на части сборок)
     // ─────────────────────────────────────────────────────────────
     function get(url, onSuccess, onError) {
         var controller = new AbortController();
@@ -66,9 +66,9 @@
 
     function catalogUrl(params) {
         var url = API_URL + 'catalog?' + authParams();
-        if (params.cat)    url += '&cat='    + params.cat;
-        if (params.sort)   url += '&sort='   + params.sort;
-        if (params.page)   url += '&page='   + params.page;
+        if (params.cat)  url += '&cat='  + params.cat;
+        if (params.sort) url += '&sort=' + params.sort;
+        if (params.page) url += '&page=' + params.page;
         return url;
     }
 
@@ -76,13 +76,8 @@
         return API_URL + 'search?' + authParams() + '&s=' + encodeURIComponent(query);
     }
 
-    function postUrl(id) {
-        return API_URL + 'post/' + id + '?' + authParams();
-    }
-
-    function personUrl(id) {
-        return API_URL + 'person/' + id + '?' + authParams();
-    }
+    function postUrl(id)   { return API_URL + 'post/'   + id + '?' + authParams(); }
+    function personUrl(id) { return API_URL + 'person/' + id + '?' + authParams(); }
 
     // ─────────────────────────────────────────────────────────────
     // Нормализация карточки: Filmix API → Lampa card
@@ -93,384 +88,427 @@
         return section === 7 || section === 93 || section === 14;
     }
 
+    // Заменяет w140/w220 → w400 в URL постера (крупнее)
+    function posterLarge(url) {
+        if (!url) return '';
+        return url.replace('/w140/', '/w400/').replace('/w220/', '/w400/');
+    }
+
+    // Filmix отдаёт полные URL постеров. Lampa.Api.img всегда подставляет
+    // TMDB-базу, поэтому НЕ задаём poster_path, а кладём полный URL в poster/img.
     function convertCard(item) {
         if (!item) return null;
 
-        var genres  = (item.categories || []).map(function (name) { return { name: name }; });
+        var serial  = isSerial(item.section);
         var year    = item.year ? String(item.year) : '';
+        var poster  = posterLarge(item.poster);
+        var genres  = (item.categories || []).map(function (name) { return { name: name }; });
+        var rating  = parseFloat(item.kp_rating) || parseFloat(item.imdb_rating) || 0;
+
+        var card = {
+            id:        item.id,
+            filmix_id: item.id,
+            alt_name:  item.alt_name || '',
+            source:    SOURCE_NAME,          // критично: иначе клик уйдёт в tmdb
+
+            overview:  item.short_story || '',
+            genres:    genres,
+            vote_average: rating,
+            vote_count:   parseInt(item.kp_votes, 10) || 0,
+            kp_rating:    parseFloat(item.kp_rating)   || 0,
+            imdb_rating:  parseFloat(item.imdb_rating) || 0,
+            quality:      item.quality || item.rip || '',
+
+            // постер: полный URL — кладём в poster/img (не в poster_path)
+            poster: poster,
+            img:    poster,
+
+            production_countries: (item.countries || []).map(function (c) { return { name: c }; }),
+        };
+
+        // method вычисляется Lampa как original_name ? 'tv' : 'movie'
+        if (serial) {
+            card.name           = item.title          || item.original_title || '';
+            card.original_name  = item.original_title || item.title          || '';
+            card.first_air_date = year ? year + '-01-01' : '';
+            card.number_of_seasons = 1;
+        } else {
+            card.title          = item.title          || item.original_title || '';
+            card.original_title = item.original_title || item.title          || '';
+            card.release_date   = year ? year + '-01-01' : '';
+        }
+
+        return card;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // player_links.playlist → структуры сезонов/эпизодов Lampa
+    // ─────────────────────────────────────────────────────────────
+
+    // Возвращает { episodes:[...], seasons_count } для запрошенного сезона.
+    // playlist: { season: { translation: { ep: {link, qualities} } } }
+    function buildSeasonEpisodes(playlist, seasonNum, card) {
+        var translations = playlist[seasonNum] || {};
+        var transNames   = Object.keys(translations);
+        var episodesMap  = {};   // epNum → { translationName: link }
+
+        transNames.forEach(function (trans) {
+            var eps = translations[trans] || {};
+            Object.keys(eps).forEach(function (epNum) {
+                var ep = eps[epNum];
+                if (!episodesMap[epNum]) episodesMap[epNum] = {};
+                episodesMap[epNum][trans] = (ep && ep.link) ? ep.link : ep;
+            });
+        });
+
+        var episodes = Object.keys(episodesMap)
+            .sort(function (a, b) { return +a - +b; })
+            .map(function (epNum) {
+                return {
+                    id:             card.id + '_' + seasonNum + '_' + epNum,
+                    season_number:  +seasonNum,
+                    episode_number: +epNum,
+                    name:           'Серия ' + epNum,
+                    overview:       '',
+                    air_date:       '',
+                    still_path:     '',
+                    // нестандартные поля для собственного плеера / отладки
+                    filmix_urls:    episodesMap[epNum],
+                    translations:   transNames,
+                };
+            });
 
         return {
-            // Идентификаторы
-            id:             item.id,
-            filmix_id:      item.id,
-            alt_name:       item.alt_name || '',
-
-            // Метаданные
-            title:          item.title          || item.original_title || '',
-            original_title: item.original_title || item.title          || '',
-            overview:       item.short_story    || '',
-            release_date:   year ? year + '-01-01' : '',
-            genres:         genres,
-            type:           isSerial(item.section) ? 'tv' : 'movie',
-            quality:        item.quality || item.rip || '',
-
-            // Рейтинги (API может вернуть строку "-" вместо числа без токена)
-            vote_average:  parseFloat(item.kp_rating) || parseFloat(item.imdb_rating) || 0,
-            vote_count:    parseInt(item.kp_votes, 10) || 0,
-            filmix_rating:  item.rating || 0,
-            kp_rating:      parseFloat(item.kp_rating)  || 0,
-            imdb_rating:    parseFloat(item.imdb_rating) || 0,
-
-            // Постер (thumb w220 → w400 для отображения)
-            poster:         posterLarge(item.poster),
-            poster_path:    posterLarge(item.poster),
-            backdrop_path:  posterLarge(item.poster),
-
-            // Производство
-            production_countries: (item.countries || []).map(function (c) { return { name: c }; }),
-
-            // Сериал
-            number_of_seasons: isSerial(item.section) ? 1 : undefined,
+            episodes:      episodes,
+            seasons_count: Object.keys(playlist).length,
         };
     }
 
-    // Заменяет w220 → w400 в URL постера
-    function posterLarge(url) {
-        if (!url) return '';
-        return url.replace('/w220/', '/w400/').replace('/w140/', '/w400/');
+    function countSeasons(playlist) {
+        return Object.keys(playlist || {}).length;
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Построение credits / seasons из полного поста
+    // Разбор параметров категории
+    // cat может прийти как: params.genres ('s0'), либо в URL ?cat=s0
     // ─────────────────────────────────────────────────────────────
+    function parseCat(params) {
+        var cat  = 's0';
+        var sort = 'date';
 
-    function buildCredits(data) {
-        var cast = (data.found_actors || []).map(function (a) {
-            return {
-                id:            a.id,
-                name:          a.name,
-                original_name: a.original_name || '',
-                character:     '',
-                profile_path:  '',
-            };
-        });
+        if (params.genres) cat = String(params.genres);
+        if (params.sort)   sort = params.sort;
 
-        var crew = (data.directors || []).map(function (name) {
-            return { name: name, job: 'Director', profile_path: '' };
-        });
-
-        return { cast: cast, crew: crew };
-    }
-
-    // player_links.playlist → массив сезонов Lampa
-    function buildSeasons(playlist, title) {
-        var seasons = [];
-        Object.keys(playlist).sort(function (a, b) { return +a - +b; }).forEach(function (num) {
-            var translations = playlist[num];
-            var firstKey     = Object.keys(translations || {})[0];
-            var epCount      = firstKey ? Object.keys(translations[firstKey]).length : 0;
-
-            seasons.push({
-                season_number: +num,
-                episode_count: epCount,
-                name:          (title || '') + '. Сезон ' + num,
-                air_date:      '',
-            });
-        });
-        return seasons;
-    }
-
-    // player_links.playlist → seasons_obj (для Lampa-плеера)
-    // Структура: { "1": { season_number, translations, episodes: { "1": { episode_number, name, urls } } } }
-    function buildSeasonsObj(playlist) {
-        var obj = {};
-        Object.keys(playlist).forEach(function (seasonNum) {
-            var translations  = playlist[seasonNum];
-            var episodesObj   = {};
-            var translationList = Object.keys(translations);
-
-            translationList.forEach(function (transName) {
-                var eps = translations[transName];
-                Object.keys(eps).forEach(function (epNum) {
-                    var ep = eps[epNum];
-                    if (!episodesObj[epNum]) {
-                        episodesObj[epNum] = {
-                            episode_number: +epNum,
-                            name:           'Серия ' + epNum,
-                            urls:           {},
-                        };
-                    }
-                    episodesObj[epNum].urls[transName] = ep.link || ep;
-                });
-            });
-
-            obj[seasonNum] = {
-                season_number: +seasonNum,
-                translations:  translationList,
-                episodes:      episodesObj,
-            };
-        });
-        return obj;
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // Разбор URL списка: /catalog/list?plugin=filmix&cat=s0&sort=date
-    // ─────────────────────────────────────────────────────────────
-    function parseListUrl(url) {
-        var result = { cat: 's0', sort: 'date' };
-        if (!url) return result;
+        var url = params.url || '';
         var catM  = url.match(/[?&]cat=([^&]+)/);
         var sortM = url.match(/[?&]sort=([^&]+)/);
-        if (catM)  result.cat  = catM[1];
-        if (sortM) result.sort = sortM[1];
-        return result;
+        if (catM)  cat  = catM[1];
+        if (sortM) sort = sortM[1];
+
+        // нормализуем: допускаем 's0' или '0'
+        if (/^\d+$/.test(cat)) cat = 's' + cat;
+
+        return { cat: cat, sort: sort };
+    }
+
+    function catTitle(cat) {
+        return ({
+            s0:  'Фильмы',
+            s7:  'Сериалы',
+            s14: 'Мультфильмы',
+            s93: 'Аниме',
+        })[cat] || 'Каталог';
     }
 
     // ─────────────────────────────────────────────────────────────
     // Объект источника
+    // Контракт Lampa: методы получают (params, oncomplite, onerror)
     // ─────────────────────────────────────────────────────────────
     var Source = {
         SOURCE_NAME:  SOURCE_NAME,
         SOURCE_TITLE: SOURCE_TITLE,
 
-        // ── Главный экран ─────────────────────────────────────────
-        main: function (params) {
+        // ── Главный экран: массив рядов [{title, results:[...]}] ──
+        main: function (params, oncomplite, onerror) {
             var rows = [
-                { title: 'Новые фильмы',     cat: 's0',  sort: 'date'   },
-                { title: 'Новые сериалы',    cat: 's7',  sort: 'date'   },
-                { title: 'Топ фильмы',       cat: 's0',  sort: 'rating' },
-                { title: 'Топ сериалы',      cat: 's7',  sort: 'rating' },
-                { title: 'Мультфильмы',      cat: 's14', sort: 'date'   },
-                { title: 'Аниме',            cat: 's93', sort: 'date'   },
+                { title: 'Новые фильмы',  cat: 's0',  sort: 'date',   genres: 's0'  },
+                { title: 'Новые сериалы', cat: 's7',  sort: 'date',   genres: 's7'  },
+                { title: 'Топ фильмы',    cat: 's0',  sort: 'rating', genres: 's0'  },
+                { title: 'Топ сериалы',   cat: 's7',  sort: 'rating', genres: 's7'  },
+                { title: 'Мультфильмы',   cat: 's14', sort: 'date',   genres: 's14' },
+                { title: 'Аниме',         cat: 's93', sort: 'date',   genres: 's93' },
             ];
 
-            var status = new Lampa.Status(rows.length);
-            status.onComplite = params.onComplite || function () {};
+            var results = new Array(rows.length);
+            var done = 0;
 
-            rows.forEach(function (row) {
+            function finish() {
+                var data = results.filter(function (r) { return r && r.results && r.results.length; });
+                if (data.length) oncomplite(data);
+                else (onerror || function () {})();
+            }
+
+            rows.forEach(function (row, i) {
                 get(catalogUrl({ cat: row.cat, sort: row.sort, page: 1 }),
                     function (data) {
-                        if (!Array.isArray(data) || !data.length) { status.error(); return; }
-                        status.append(row.title, row.title, data.map(convertCard).filter(Boolean));
+                        if (Array.isArray(data) && data.length) {
+                            results[i] = {
+                                title:   row.title,
+                                genres:  row.genres,   // для onMore → category
+                                results: data.map(convertCard).filter(Boolean),
+                            };
+                        }
+                        if (++done === rows.length) finish();
                     },
-                    function () { status.error(); }
+                    function () {
+                        if (++done === rows.length) finish();
+                    }
                 );
             });
+
+            // пагинации на главной нет
+            return false;
         },
 
-        // ── Меню категорий ────────────────────────────────────────
-        menu: function (params) {
-            var categories = [
-                { title: 'Фильмы',      cat: 's0'  },
-                { title: 'Сериалы',     cat: 's7'  },
-                { title: 'Мультфильмы', cat: 's14' },
-                { title: 'Аниме',       cat: 's93' },
-            ];
-
-            var sorts = [
-                { label: 'По дате',     sort: 'date'   },
-                { label: 'По рейтингу', sort: 'rating' },
-                { label: 'По году',     sort: 'year'   },
-            ];
-
-            var sections = [];
-            categories.forEach(function (cat) {
-                sorts.forEach(function (s) {
-                    sections.push({
-                        title: cat.title + ' — ' + s.label,
-                        url:   '/catalog/list?plugin=' + SOURCE_NAME +
-                               '&cat=' + cat.cat + '&sort=' + s.sort,
-                    });
-                });
-            });
-
-            params.onComplite(sections);
+        // ── Меню каталога: [{title, id}] ──
+        menu: function (params, oncomplite) {
+            oncomplite([
+                { title: 'Фильмы',      id: 's0'  },
+                { title: 'Сериалы',     id: 's7'  },
+                { title: 'Мультфильмы', id: 's14' },
+                { title: 'Аниме',       id: 's93' },
+            ]);
         },
 
-        // ── Список с пагинацией ───────────────────────────────────
-        list: function (params) {
-            var parsed = parseListUrl(params.url);
+        // ── Категория (category_full): массив рядов + next() ──
+        category: function (params, oncomplite, onerror) {
+            var parsed = parseCat(params);
+            var cat    = parsed.cat;
+            var title  = catTitle(cat);
+            var page   = 0;
+
+            // одна страница = один ряд (50 карточек)
+            function loadPage(ok, fail) {
+                page++;
+                get(catalogUrl({ cat: cat, sort: 'date', page: page }),
+                    function (data) {
+                        if (Array.isArray(data) && data.length) {
+                            ok([{
+                                title:   title + (page > 1 ? ' — стр. ' + page : ''),
+                                results: data.map(convertCard).filter(Boolean),
+                            }]);
+                        } else {
+                            (fail || function () {})();
+                        }
+                    },
+                    fail || function () {}
+                );
+            }
+
+            loadPage(oncomplite, onerror);
+
+            // функция пагинации для onNext
+            return function (resolve, reject) {
+                loadPage(resolve, reject);
+            };
+        },
+
+        // ── Список с пагинацией (component list): {results, total_pages} ──
+        list: function (params, oncomplite, onerror) {
+            var parsed = parseCat(params);
             var page   = params.page || 1;
 
             get(catalogUrl({ cat: parsed.cat, sort: parsed.sort, page: page }),
                 function (data) {
                     if (!Array.isArray(data) || !data.length) {
-                        params.empty ? params.empty() : params.onComplite([]);
+                        (onerror || function () {})();
                         return;
                     }
-                    params.onComplite({
+                    oncomplite({
                         results:     data.map(convertCard).filter(Boolean),
-                        total_pages: 999,  // API не сообщает число страниц
+                        total_pages: 999,   // API не сообщает число страниц
+                        page:        page,
                     });
                 },
-                params.error || function () {}
+                onerror || function () {}
             );
         },
 
-        category: function (params) {
-            var Source = Lampa.Api.sources[SOURCE_NAME];
-            Source.list(params);
-        },
-
-        // ── Полная карточка ───────────────────────────────────────
-        full: function (params) {
-            var card   = params.card;
-            var id     = card.filmix_id || card.id;
-            var status = new Lampa.Status(1);
-            status.onComplite = params.onComplite || function () {};
+        // ── Полная карточка: {movie, persons, simular, episodes, videos} ──
+        full: function (params, oncomplite, onerror) {
+            var id = params.id || (params.card && (params.card.filmix_id || params.card.id));
+            if (!id) { (onerror || function () {})(); return; }
 
             get(postUrl(id),
                 function (data) {
-                    if (!data || !data.id) { status.error(); return; }
+                    if (!data || !data.id) { (onerror || function () {})(); return; }
 
-                    var enriched = convertCard(data);
+                    var movie = convertCard(data);
+                    var playlist = ((data.player_links || {}).playlist) || {};
+                    var seasonsCount = countSeasons(playlist);
 
-                    // Актёры и режиссёры
-                    enriched.credits = buildCredits(data);
+                    // длительность, дата
+                    if (data.duration) movie.runtime = data.duration;
 
-                    // Похожие
-                    enriched.similar = {
-                        results: (data.relates || []).map(convertCard).filter(Boolean),
-                    };
+                    // персоны
+                    var cast = (data.found_actors || []).map(function (a) {
+                        return {
+                            id: a.id, name: a.name,
+                            original_name: a.original_name || '',
+                            character: '', profile_path: '',
+                        };
+                    });
+                    var crew = (data.directors || []).map(function (name) {
+                        return { name: name, job: 'Director', profile_path: '' };
+                    });
 
-                    // Трейлеры
+                    // сериал: количество сезонов, прикрепляем плейлист к карточке
+                    if (seasonsCount) {
+                        movie.number_of_seasons = seasonsCount;
+                        movie.seasons_count     = seasonsCount;
+                        movie.filmix_playlist   = playlist;
+                    }
+
+                    // трейлеры
                     var trailers = (data.player_links || {}).trailer || [];
-                    enriched.videos = {
+                    var videos = {
                         results: trailers.map(function (t, i) {
                             return {
-                                name: 'Trailer ' + (i + 1),
-                                key:  t.link || t,
-                                site: 'direct',
-                                type: 'Trailer',
+                                name: 'Трейлер ' + (i + 1),
+                                key:  (t && t.link) ? t.link : t,
+                                site: 'direct', type: 'Trailer',
                             };
                         }),
                     };
 
-                    // Прямые ссылки на фильм
+                    // прямые ссылки на фильм
                     var movieLinks = (data.player_links || {}).movie || [];
-                    if (movieLinks.length) {
-                        enriched.filmix_links = movieLinks;
+                    if (movieLinks.length) movie.filmix_links = movieLinks;
+
+                    var result = {
+                        movie:   movie,
+                        persons: { cast: cast, crew: crew },
+                        simular: { results: (data.relates || []).map(convertCard).filter(Boolean) },
+                        videos:  videos,
+                    };
+
+                    // эпизоды первого сезона (для сериалов)
+                    if (seasonsCount) {
+                        var firstSeason = Object.keys(playlist).sort(function (a, b) { return +a - +b; })[0];
+                        var built = buildSeasonEpisodes(playlist, firstSeason, movie);
+                        result.episodes = {
+                            episodes:      built.episodes,
+                            seasons_count: built.seasons_count,
+                            name:          'Сезон ' + firstSeason,
+                        };
                     }
 
-                    // Сериальные данные
-                    var playlist = ((data.player_links || {}).playlist) || {};
-                    if (Object.keys(playlist).length) {
-                        enriched.seasons      = buildSeasons(playlist, data.title);
-                        enriched.seasons_obj  = buildSeasonsObj(playlist);
-                        enriched.number_of_seasons = enriched.seasons.length;
-                    }
-
-                    status.append('full', 'full', enriched);
+                    oncomplite(result);
                 },
-                function () { status.error(); }
+                onerror || function () {}
             );
         },
 
-        // ── Поиск ─────────────────────────────────────────────────
-        // Без токена API возвращает пустой массив.
-        // Для поиска необходим активный filmix_token в Lampa.Storage.
-        search: function (params) {
+        // ── Сезоны: (tv, from, oncomplite) → {[n]:{episodes, seasons_count}} ──
+        seasons: function (tv, from, oncomplite) {
+            var id = (tv && (tv.filmix_id || tv.id));
+            var playlist = tv && tv.filmix_playlist;
+
+            function emit(pl) {
+                var out = {};
+                (from || []).forEach(function (seasonNum) {
+                    var built = buildSeasonEpisodes(pl, seasonNum, tv || {});
+                    out[seasonNum] = {
+                        season_number: +seasonNum,
+                        episodes:      built.episodes,
+                        seasons_count: built.seasons_count || countSeasons(pl),
+                    };
+                });
+                oncomplite(out);
+            }
+
+            // плейлист уже есть в карточке (из full) — используем его
+            if (playlist && Object.keys(playlist).length) { emit(playlist); return; }
+
+            // иначе запрашиваем пост
+            if (!id) { oncomplite({}); return; }
+            get(postUrl(id),
+                function (data) {
+                    var pl = ((data && data.player_links) || {}).playlist || {};
+                    emit(pl);
+                },
+                function () { oncomplite({}); }
+            );
+        },
+
+        // ── Поиск (нужен токен) ──
+        search: function (params, oncomplite, onerror) {
             var query = params.query || params.search || '';
-            if (!query) { params.onComplite([]); return; }
+            if (!query) { oncomplite({ movie: { results: [] }, tv: { results: [] } }); return; }
 
             if (!token()) {
-                Lampa.Noty.show('Filmix: для поиска необходим токен. Укажите его в настройках.');
-                params.empty ? params.empty() : params.onComplite([]);
+                Lampa.Noty.show('Filmix: для поиска нужен токен (Настройки → Filmix).');
+                oncomplite({ movie: { results: [] }, tv: { results: [] } });
                 return;
             }
 
             get(searchUrl(query),
                 function (data) {
-                    if (!Array.isArray(data) || !data.length) {
-                        params.empty ? params.empty() : params.onComplite([]);
-                        return;
-                    }
-                    params.onComplite(data.map(convertCard).filter(Boolean));
+                    var cards = (Array.isArray(data) ? data : []).map(convertCard).filter(Boolean);
+                    // глобальный поиск ждёт {movie:{...}, tv:{...}} ИЛИ массив — отдаём массив рядов
+                    oncomplite([{ title: 'Filmix: ' + query, results: cards }]);
                 },
-                params.error || function () {}
+                onerror || function () {}
             );
         },
 
-        // ── Персона ───────────────────────────────────────────────
-        person: function (params) {
+        // ── Персона: {person, credits:{knownFor:[{name, credits:[...]}]}} ──
+        person: function (params, oncomplite, onerror) {
             var id = params.id || (params.card && (params.card.filmix_id || params.card.id));
-            if (!id) { params.error && params.error(); return; }
+            if (!id) { (onerror || function () {})(); return; }
 
             get(personUrl(id),
                 function (data) {
-                    if (!data || !data.id) { params.error && params.error(); return; }
+                    if (!data || !data.id) { (onerror || function () {})(); return; }
 
-                    params.onComplite({
-                        id:             data.id,
-                        name:           data.name,
-                        original_name:  data.original_name || '',
-                        biography:      data.about         || '',
-                        birthday:       data.birth         || '',
-                        deathday:       data.death !== '-' ? (data.death || '') : '',
-                        place_of_birth: data.birth_place   || '',
-                        gender:         data.gender === 'man' ? 2 : 1,
-                        profile_path:   data.poster        || '',
-                        known_for_department: data.career  || '',
-                        movie_credits: {
-                            cast: (data.movies || []).map(convertCard).filter(Boolean),
+                    var movies = (data.movies || []).map(convertCard).filter(Boolean);
+
+                    oncomplite({
+                        person: {
+                            id:            data.id,
+                            name:          data.name,
+                            original_name: data.original_name || '',
+                            biography:     data.about       || '',
+                            birthday:      data.birth       || '',
+                            deathday:      data.death !== '-' ? (data.death || '') : '',
+                            place_of_birth: data.birth_place || '',
+                            profile_path:  data.poster      || '',
+                            known_for_department: data.career || '',
+                        },
+                        credits: {
+                            knownFor: movies.length ? [
+                                { name: data.career || 'Фильмография', credits: movies },
+                            ] : [],
                         },
                     });
                 },
-                params.error || function () {}
+                onerror || function () {}
             );
         },
 
-        // ── Сезоны ────────────────────────────────────────────────
-        seasons: function (params) {
-            var id = params.filmix_id || (params.card && params.card.filmix_id);
-            if (!id) { params.onComplite([]); return; }
-
-            get(postUrl(id),
-                function (data) {
-                    if (!data || !data.player_links) { params.onComplite([]); return; }
-                    var playlist = data.player_links.playlist || {};
-                    params.onComplite({
-                        seasons:     buildSeasons(playlist, data.title),
-                        seasons_obj: buildSeasonsObj(playlist),
-                    });
-                },
-                function () { params.onComplite([]); }
-            );
-        },
-
-        // ── Сброс сетевых запросов ────────────────────────────────
+        // ── Сброс сетевых запросов ──
         clear: function () {
             clearRequests();
         },
 
-        // ── Методы, которые Lampa может вызвать (стабы) ──────────
-        img: function (path) {
-            return path || '';
-        },
-
-        menuCategory: function (params) {
-            if (params && params.onComplite) params.onComplite([]);
-        },
-
-        company: function (params) {
-            if (params && params.onComplite) params.onComplite({ results: [] });
-        },
-
-        favorite: function (params) {
-            if (params && params.onComplite) params.onComplite({ results: [] });
-        },
-
-        relise: function (params) {
-            if (params && params.onComplite) params.onComplite({ results: [] });
-        },
-
-        genres: function (onComplite) {
-            if (onComplite) onComplite([]);
-        },
-
-        collections: function (params) {
-            if (params && params.onComplite) params.onComplite({ results: [] });
-        },
+        // ── Прочие методы интерфейса (заглушки) ──
+        img: function (path) { return path || ''; },
+        menuCategory: function (params, oncomplite) { (oncomplite || function () {})([]); },
+        company:     function (params, oncomplite) { (oncomplite || function () {})({ results: [] }); },
+        favorite:    function (params, oncomplite) { (oncomplite || function () {})({ results: [] }); },
+        relise:      function (params, oncomplite) { (oncomplite || function () {})({ results: [] }); },
+        genres:      function (params, oncomplite) { (oncomplite || function () {})([]); },
+        collections: function (params, oncomplite) { (oncomplite || function () {})({ results: [] }); },
     };
 
     // ─────────────────────────────────────────────────────────────
@@ -479,19 +517,12 @@
     function showSettings() {
         Lampa.Select.show({
             title: 'Filmix — настройки',
-            items: [
-                {
-                    title:       'Токен: ' + (token() ? token().substring(0, 8) + '…' : 'не задан'),
-                    description: 'Нужен для поиска и взрослого контента',
-                    action:      'token',
-                },
-            ],
-            onSelect: function (item) {
-                if (item.action === 'token') {
-                    // Lampa не имеет встроенного текстового ввода в TV-режиме,
-                    // поэтому показываем подсказку
-                    Lampa.Noty.show('Filmix: установите токен через Lampa.Storage.set("filmix_token", "ВАШ_ТОКЕН")');
-                }
+            items: [{
+                title:       'Токен: ' + (token() ? token().substring(0, 8) + '…' : 'не задан'),
+                description: 'Нужен для поиска и взрослого контента',
+            }],
+            onSelect: function () {
+                Lampa.Noty.show('Установите токен: Lampa.Storage.set("filmix_token", "ВАШ_ТОКЕН")');
             },
         });
     }
@@ -503,25 +534,19 @@
         if (window.filmix_plugin_loaded) return;
         window.filmix_plugin_loaded = true;
 
-        if (Lampa.Api.sources[SOURCE_NAME]) {
-            Lampa.Noty.show('Filmix: источник уже зарегистрирован другим плагином');
-            return;
-        }
-
-        // Регистрируем источник
         Lampa.Api.sources[SOURCE_NAME] = Source;
         Object.defineProperty(Lampa.Api.sources, SOURCE_NAME, {
             get:          function () { return Source; },
             configurable: true,
         });
 
-        // Добавляем в выпадающий список источников
         if (Lampa.Params && Lampa.Params.values && Lampa.Params.values.source) {
             Lampa.Params.values.source[SOURCE_NAME] = SOURCE_TITLE;
         }
     }
 
-    Lampa.Listener.follow('app', function (event) {
+    if (window.appready) init();
+    else Lampa.Listener.follow('app', function (event) {
         if (event.type === 'ready') init();
     });
 
