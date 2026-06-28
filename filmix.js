@@ -15,7 +15,7 @@
         return id;
     }());
 
-    var network = new Lampa.Reguest();
+    var _currentRequest = null;
 
     // ─────────────────────────────────────────────────────────────
     // Аутентификация
@@ -38,8 +38,33 @@
     // Сетевой слой
     // ─────────────────────────────────────────────────────────────
     function get(url, onSuccess, onError) {
-        network.timeout(15000);
-        network.get(url, onSuccess, onError || function () {});
+        if (_currentRequest) {
+            try { _currentRequest.abort(); } catch (e) {}
+        }
+        var controller = new AbortController();
+        _currentRequest = controller;
+        fetch(url, { signal: controller.signal })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (data) {
+                _currentRequest = null;
+                onSuccess(data);
+            })
+            .catch(function (e) {
+                _currentRequest = null;
+                if (e.name !== 'AbortError') {
+                    (onError || function () {})(e);
+                }
+            });
+    }
+
+    function clearRequests() {
+        if (_currentRequest) {
+            try { _currentRequest.abort(); } catch (e) {}
+            _currentRequest = null;
+        }
     }
 
     function catalogUrl(params) {
@@ -418,7 +443,7 @@
 
         // ── Сброс сетевых запросов ────────────────────────────────
         clear: function () {
-            network.clear();
+            clearRequests();
         },
 
         // ── Методы, которые Lampa может вызвать (стабы) ──────────
