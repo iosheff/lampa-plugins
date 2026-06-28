@@ -64,9 +64,9 @@
 
     function catalogUrl(params) {
         var url = API_URL + 'catalog?' + authParams();
-        if (params.cat)  url += '&cat='  + params.cat;
-        if (params.sort) url += '&sort=' + params.sort;
-        if (params.page) url += '&page=' + params.page;
+        if (params.cat)  url += '&filter=' + params.cat;   // фильтр секции: s0/s7/s14/s93
+        if (params.sort) url += '&sort='   + params.sort;
+        if (params.page) url += '&page='   + params.page;
         return url;
     }
 
