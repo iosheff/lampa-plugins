@@ -15,7 +15,7 @@
         return id;
     }());
 
-    var _currentRequest = null;
+    var _activeControllers = [];
 
     // ─────────────────────────────────────────────────────────────
     // Аутентификация
@@ -38,22 +38,21 @@
     // Сетевой слой
     // ─────────────────────────────────────────────────────────────
     function get(url, onSuccess, onError) {
-        if (_currentRequest) {
-            try { _currentRequest.abort(); } catch (e) {}
-        }
         var controller = new AbortController();
-        _currentRequest = controller;
+        _activeControllers.push(controller);
         fetch(url, { signal: controller.signal })
             .then(function (r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
             })
             .then(function (data) {
-                _currentRequest = null;
+                var idx = _activeControllers.indexOf(controller);
+                if (idx !== -1) _activeControllers.splice(idx, 1);
                 onSuccess(data);
             })
             .catch(function (e) {
-                _currentRequest = null;
+                var idx = _activeControllers.indexOf(controller);
+                if (idx !== -1) _activeControllers.splice(idx, 1);
                 if (e.name !== 'AbortError') {
                     (onError || function () {})(e);
                 }
@@ -61,10 +60,8 @@
     }
 
     function clearRequests() {
-        if (_currentRequest) {
-            try { _currentRequest.abort(); } catch (e) {}
-            _currentRequest = null;
-        }
+        _activeControllers.forEach(function (c) { try { c.abort(); } catch (e) {} });
+        _activeControllers = [];
     }
 
     function catalogUrl(params) {
