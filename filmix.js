@@ -285,6 +285,11 @@
             );
         },
 
+        category: function (params) {
+            var Source = Lampa.Api.sources[SOURCE_NAME];
+            Source.list(params);
+        },
+
         // ── Полная карточка ───────────────────────────────────────
         full: function (params) {
             var card   = params.card;
