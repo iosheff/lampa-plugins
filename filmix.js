@@ -40,23 +40,21 @@
     function get(url, onSuccess, onError) {
         var controller = new AbortController();
         _activeControllers.push(controller);
+        function cleanup() {
+            var idx = _activeControllers.indexOf(controller);
+            if (idx !== -1) _activeControllers.splice(idx, 1);
+        }
         fetch(url, { signal: controller.signal })
             .then(function (r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
             })
-            .then(function (data) {
-                var idx = _activeControllers.indexOf(controller);
-                if (idx !== -1) _activeControllers.splice(idx, 1);
-                onSuccess(data);
-            })
-            .catch(function (e) {
-                var idx = _activeControllers.indexOf(controller);
-                if (idx !== -1) _activeControllers.splice(idx, 1);
-                if (e.name !== 'AbortError') {
-                    (onError || function () {})(e);
-                }
-            });
+            .then(
+                // onFulfilled: исключения из onSuccess НЕ должны попадать в onError,
+                // поэтому используем второй аргумент then(), а не .catch()
+                function (data) { cleanup(); onSuccess(data); },
+                function (e)    { cleanup(); if (e.name !== 'AbortError') (onError || function () {})(e); }
+            );
     }
 
     function clearRequests() {
