@@ -17,9 +17,13 @@
         '<path d="M4 9h16M9 5v14M15 5v14" stroke="currentColor" stroke-width="1.6"/></svg>';
 
     // Зафиксированный device_id для одного устройства
-    var DEVICE_ID = Lampa.Storage.field('filmix_device_id') || (function () {
-        var id = Lampa.Utils.uid(16);
-        Lampa.Storage.set('filmix_device_id', id);
+    var DEVICE_ID = (function () {
+        var id = Lampa.Storage.field('filmix_device_id');
+        // защита от старого бага, когда сохранялась строка "undefined"/пусто
+        if (!id || id === 'undefined' || id === 'null') {
+            id = Lampa.Utils.uid(16);
+            Lampa.Storage.set('filmix_device_id', id);
+        }
         return id;
     }());
 
@@ -566,28 +570,14 @@
 
                 // Показываем диалог, который остаётся на экране до получения токена
                 Lampa.Select.show({
-                    title: 'Привязка Filmix',
+                    title: 'Привязка Filmix — код: ' + userCode,
                     items: [
-                        {
-                            title:       userCode,
-                            subtitle:    'Код для ввода на filmix.me',
-                            template:    'selected',
-                            noclose:     true,
-                        },
-                        {
-                            title:    'Откройте filmix.me → «Устройства» и введите этот код',
-                            template: 'info',
-                            noclose:  true,
-                        },
-                        {
-                            title:   'Отмена',
-                            value:   'cancel',
-                        },
+                        { title: 'Ваш код: ' + userCode },
+                        { title: 'Откройте filmix.me → «Устройства» и введите этот код' },
+                        { title: 'Закрыть', cancel: true },
                     ],
-                    onSelect: function (item) {
-                        if (item.value === 'cancel') stopActivation();
-                    },
-                    onBack: function () { stopActivation(); },
+                    onSelect: function () { stopActivation(); Lampa.Controller.toggle('settings_component'); },
+                    onBack:   function () { stopActivation(); Lampa.Controller.toggle('settings_component'); },
                 });
 
                 var attempts = 0;
