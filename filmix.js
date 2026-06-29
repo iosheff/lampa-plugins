@@ -8,6 +8,14 @@
     var SOURCE_TITLE = 'Filmix';
     var API_URL      = 'http://filmixapp.cyou/api/v2/';
 
+    // Раздел настроек в Lampa (имя «Filmix» уже занято сторонним плагином)
+    var PLUGIN_TITLE      = 'MediaSources';
+    var SETTINGS_COMPONENT = 'mediasources';
+    var SETTINGS_ICON =
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+        '<path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="1.6"/>' +
+        '<path d="M4 9h16M9 5v14M15 5v14" stroke="currentColor" stroke-width="1.6"/></svg>';
+
     // Зафиксированный device_id для одного устройства
     var DEVICE_ID = Lampa.Storage.field('filmix_device_id') || (function () {
         var id = Lampa.Utils.uid(16);
@@ -529,17 +537,64 @@
     };
 
     // ─────────────────────────────────────────────────────────────
-    // Настройки (ввод токена)
+    // Раздел настроек «MediaSources» (через Lampa.SettingsApi)
+    // Токен НЕ хранится в коде — вводится пользователем и сохраняется
+    // в Lampa.Storage['filmix_token'] (его читает token()).
     // ─────────────────────────────────────────────────────────────
-    function showSettings() {
-        Lampa.Select.show({
-            title: 'Filmix — настройки',
-            items: [{
-                title:       'Токен: ' + (token() ? token().substring(0, 8) + '…' : 'не задан'),
-                description: 'Нужен для поиска и взрослого контента',
-            }],
-            onSelect: function () {
-                Lampa.Noty.show('Установите токен: Lampa.Storage.set("filmix_token", "ВАШ_ТОКЕН")');
+    function registerSettings() {
+        if (!Lampa.SettingsApi) return;
+
+        Lampa.SettingsApi.addComponent({
+            component: SETTINGS_COMPONENT,
+            name:      PLUGIN_TITLE,
+            icon:      SETTINGS_ICON,
+        });
+
+        // Заголовок-секция Filmix
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param:     { type: 'title' },
+            field:     { name: 'Filmix' },
+        });
+
+        // Поле ввода токена (тип input — значение сохраняется в Storage автоматически)
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: {
+                name:        'filmix_token',
+                type:        'input',
+                values:      '',
+                'default':   '',
+                placeholder: 'Вставьте токен Filmix',
+            },
+            field: {
+                name:        'Токен Filmix',
+                description: 'Нужен для поиска и доступа к плеерам. Получить можно в приложении/на сайте Filmix.',
+            },
+            onChange: function (value) {
+                Lampa.Storage.set('filmix_token', (value || '').trim());
+                Lampa.Noty.show((value || '').trim()
+                    ? 'Filmix: токен сохранён'
+                    : 'Filmix: токен очищен');
+            },
+        });
+
+        // Кнопка проверки токена
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param:     { type: 'button' },
+            field:     { name: 'Проверить токен' },
+            onChange:  function () {
+                if (!token()) { Lampa.Noty.show('Filmix: токен не задан'); return; }
+                Lampa.Noty.show('Filmix: проверяю токен…');
+                get(searchUrl('matrix'),
+                    function (data) {
+                        Lampa.Noty.show(Array.isArray(data) && data.length
+                            ? 'Filmix: токен работает ✓'
+                            : 'Filmix: токен принят, но поиск пуст');
+                    },
+                    function () { Lampa.Noty.show('Filmix: токен недействителен ✗'); }
+                );
             },
         });
     }
@@ -560,6 +615,8 @@
         if (Lampa.Params && Lampa.Params.values && Lampa.Params.values.source) {
             Lampa.Params.values.source[SOURCE_NAME] = SOURCE_TITLE;
         }
+
+        registerSettings();
     }
 
     if (window.appready) init();
