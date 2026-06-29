@@ -900,13 +900,17 @@
                 var rserial = !!(rc.original_name || rc.name) || params.method === 'tv';
 
                 function redirectTo(tmdbId) {
-                    Lampa.Activity.replace({
-                        component: 'full',
-                        source:    'tmdb',
-                        id:        tmdbId,
-                        method:    rserial ? 'tv' : 'movie',
-                        card:      { id: tmdbId, source: 'tmdb' },
-                    });
+                    // Defer: Activity.replace must run AFTER full()/onCreate returns,
+                    // otherwise it races the activity being created and hangs on a spinner.
+                    setTimeout(function () {
+                        Lampa.Activity.replace({
+                            component: 'full',
+                            source:    'tmdb',
+                            id:        tmdbId,
+                            method:    rserial ? 'tv' : 'movie',
+                            card:      { id: tmdbId, source: 'tmdb' },
+                        });
+                    }, 0);
                 }
 
                 // tmdb_id already resolved during lane enrichment → redirect instantly
