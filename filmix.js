@@ -538,9 +538,40 @@
             var id = params.id || (params.card && (params.card.filmix_id || params.card.id));
             if (!id) { (onerror || function () {})(); return; }
 
+            // Дополняет result данными TMDB (актёры/похожее/рекомендации/видео) и отдаёт его
+            function emit(result, movie, serial) {
+                tmdbEnrichFull(movie, serial, function (det) {
+                    if (det) {
+                        var persons = tmdbPersons(det, serial);
+                        if (persons.cast.length || persons.crew.length) result.persons = persons;
+
+                        var sim = ((det.similar && det.similar.results) || []).map(tmdbCard).filter(Boolean);
+                        if (sim.length) result.simular = { results: sim };
+
+                        var rec = ((det.recommendations && det.recommendations.results) || []).map(tmdbCard).filter(Boolean);
+                        if (rec.length) result.recomend = { results: rec };
+
+                        var vids = ((det.videos && det.videos.results) || [])
+                            .filter(function (v) { return v.site === 'YouTube' && v.key; })
+                            .map(function (v) { return { name: v.name, key: v.key, site: 'youtube', type: v.type }; });
+                        if (vids.length) result.videos = { results: vids };
+                    }
+                    oncomplite(result);
+                });
+            }
+
+            // Фолбэк: детали поста недоступны (404 и т.п.) — строим карточку из
+            // данных каталога (params.card) + TMDB. Плеера Filmix не будет (ссылок нет).
+            function fallback() {
+                var card = params.card;
+                if (!card) { (onerror || function () {})(); return; }
+                var serial = !!(card.original_name || card.name) || params.method === 'tv';
+                emit({ movie: card, persons: { cast: [], crew: [] } }, card, serial);
+            }
+
             get(postUrl(id),
                 function (data) {
-                    if (!data || !data.id) { (onerror || function () {})(); return; }
+                    if (!data || !data.id) { fallback(); return; }
 
                     var movie = convertCard(data);
                     var playlist = ((data.player_links || {}).playlist) || {};
@@ -602,30 +633,11 @@
                         };
                     }
 
-                    // Обогащаем карточку данными TMDB: рейтинги/постер/фон/описание
-                    // (в movie), а также актёры с фото, похожее, рекомендации, видео.
-                    // При сбое/без совпадения — отдаём данные Filmix как есть.
+                    // Обогащаем карточку данными TMDB и отдаём результат.
                     var serial = isSerial(data.section);
-                    tmdbEnrichFull(movie, serial, function (det) {
-                        if (det) {
-                            var persons = tmdbPersons(det, serial);
-                            if (persons.cast.length || persons.crew.length) result.persons = persons;
-
-                            var sim = ((det.similar && det.similar.results) || []).map(tmdbCard).filter(Boolean);
-                            if (sim.length) result.simular = { results: sim };
-
-                            var rec = ((det.recommendations && det.recommendations.results) || []).map(tmdbCard).filter(Boolean);
-                            if (rec.length) result.recomend = { results: rec };
-
-                            var vids = ((det.videos && det.videos.results) || [])
-                                .filter(function (v) { return v.site === 'YouTube' && v.key; })
-                                .map(function (v) { return { name: v.name, key: v.key, site: 'youtube', type: v.type }; });
-                            if (vids.length) result.videos = { results: vids };
-                        }
-                        oncomplite(result);
-                    });
+                    emit(result, movie, serial);
                 },
-                onerror || function () {}
+                fallback
             );
         },
 
