@@ -120,17 +120,26 @@
         catch (e) { return ''; }
     }
 
-    // Запрос к TMDB: сначала прокси Lampa, при ошибке — прямой api.themoviedb.org
-    function tmdbGet(path, onok, onerr) {
+    // Запрос к TMDB: сначала прокси Lampa, при ошибке ИЛИ невалидном ответе —
+    // прямой api.themoviedb.org. valid(data) — необязательная проверка, что
+    // ответ содержит нужные данные (прокси иногда режет append_to_response).
+    function tmdbGet(path, onok, onerr, valid) {
         var done = false;
-        function ok(d)  { if (!done) { done = true; onok(d); } }
-        function fail() { (onerr || function () {})(); }
+        function good(d) { return !valid || valid(d); }
+        function ok(d)   { if (!done) { done = true; onok(d); } }
+        function fail()  { if (!done) { done = true; (onerr || function () {})(); } }
+
+        function tryDirect() {
+            var net2 = new Lampa.Reguest();
+            net2.silent('https://api.themoviedb.org/3/' + path,
+                function (d) { if (good(d)) ok(d); else fail(); },
+                fail);
+        }
 
         var net1 = new Lampa.Reguest();
-        net1.silent(Lampa.TMDB.api(path), ok, function () {
-            var net2 = new Lampa.Reguest();
-            net2.silent('https://api.themoviedb.org/3/' + path, ok, fail);
-        });
+        net1.silent(Lampa.TMDB.api(path),
+            function (d) { if (good(d)) ok(d); else tryDirect(); },
+            tryDirect);
     }
 
     // Выбор лучшего совпадения: точное original-название → совпадение года → первый
@@ -233,7 +242,8 @@
         function fetchDetail(match) {
             tmdbGet(type + '/' + match.id + '?api_key=' + key + '&language=ru&append_to_response=' + append,
                 function (det) { applyTmdb(movie, det, serial); done(det); },
-                function ()    { applyTmdb(movie, match, serial); done(null); }
+                function ()    { applyTmdb(movie, match, serial); done(null); },
+                function (d)   { return d && d.credits; }   // ответ должен содержать append-секции
             );
         }
 
