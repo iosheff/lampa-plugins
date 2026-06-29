@@ -566,7 +566,17 @@
                 var card = params.card;
                 if (!card) { (onerror || function () {})(); return; }
                 var serial = !!(card.original_name || card.name) || params.method === 'tv';
-                emit({ movie: card, persons: { cast: [], crew: [] } }, card, serial);
+                // Гарантируем поля, которые рендер полной карточки читает без проверок
+                if (!card.production_companies) card.production_companies = [];
+                if (!card.production_countries) card.production_countries = [];
+                if (!card.genres)               card.genres = [];
+                if (card.source === undefined)  card.source = SOURCE_NAME;
+                emit({
+                    movie:   card,
+                    persons: { cast: [], crew: [] },
+                    simular: { results: [] },
+                    videos:  { results: [] },
+                }, card, serial);
             }
 
             get(postUrl(id),
