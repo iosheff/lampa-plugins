@@ -530,9 +530,10 @@
             var cat    = parsed.cat;
             var name   = catTitle(cat);
 
+            var latestTitle = (cat === 's7') ? 'Новые серии' : ('Latest ' + name.toLowerCase());
             var lanes = [
-                { title: 'Latest ' + name.toLowerCase(), sort: 'date'   },
-                { title: 'Top ' + name.toLowerCase(),    sort: 'rating' },
+                { title: latestTitle,                  sort: 'date'   },
+                { title: 'Top ' + name.toLowerCase(),  sort: 'rating' },
             ];
 
             // Initial load: both lanes in parallel
