@@ -563,9 +563,32 @@
                 }
                 var code     = data.code;
                 var userCode = data.user_code || '';
-                Lampa.Noty.show(
-                    'Filmix: откройте filmix.me, войдите в аккаунт и введите код: ' + userCode
-                );
+
+                // Показываем диалог, который остаётся на экране до получения токена
+                Lampa.Select.show({
+                    title: 'Привязка Filmix',
+                    items: [
+                        {
+                            title:       userCode,
+                            subtitle:    'Код для ввода на filmix.me',
+                            template:    'selected',
+                            noclose:     true,
+                        },
+                        {
+                            title:    'Откройте filmix.me → «Устройства» и введите этот код',
+                            template: 'info',
+                            noclose:  true,
+                        },
+                        {
+                            title:   'Отмена',
+                            value:   'cancel',
+                        },
+                    ],
+                    onSelect: function (item) {
+                        if (item.value === 'cancel') stopActivation();
+                    },
+                    onBack: function () { stopActivation(); },
+                });
 
                 var attempts = 0;
                 var MAX = 60; // 5 мин максимум
@@ -583,6 +606,8 @@
                             if (newToken) {
                                 stopActivation();
                                 Lampa.Storage.set('filmix_token', newToken);
+                                // Закрываем диалог и показываем успех
+                                Lampa.Controller.toggle('settings_component');
                                 Lampa.Noty.show('Filmix: аккаунт привязан! Токен сохранён ✓');
                             }
                         })
