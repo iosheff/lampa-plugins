@@ -33,6 +33,7 @@
         filmix_lane_top:      { en: 'Top',      ru: 'Топ' },
         filmix_lane_latest:   { en: 'Latest',   ru: 'Последние' },
         filmix_lane_new_episodes: { en: 'New episodes', ru: 'Новые серии' },
+        filmix_lane_continue:     { en: 'Continue watching', ru: 'Продолжить просмотр' },
         filmix_season:        { en: 'Season',   ru: 'Сезон' },
         filmix_episode:       { en: 'Episode',  ru: 'Серия' },
         filmix_trailer:       { en: 'Trailer',  ru: 'Трейлер' },
@@ -386,15 +387,57 @@
 
     // Cache of TMDB metadata by title+year (null = no match). Keeps lane/list
     // enrichment cheap on re-scroll and gives the redirect an instant tmdb_id.
-    var _tmdbMeta = {};
+    // Persisted to Lampa.Storage with a 7-day TTL so it survives reloads.
+    var CACHE_KEY = 'filmix_tmdb_cache';
+    var CACHE_TTL = 7 * 24 * 60 * 60 * 1000;   // 7 days, ms
+    var CACHE_MAX = 3000;                       // soft cap on stored entries
+    var _tmdbMeta = {};                         // key -> { m: meta|null, ts: time }
+    var _saveTimer = null;
+
+    function nowMs() { return Date.now(); }
     function metaKey(title, year, serial) {
         return (serial ? 'tv:' : 'mv:') + (title || '').toLowerCase().trim() + '|' + (year || '');
+    }
+
+    // Load cache from Storage, dropping entries older than the TTL.
+    function loadMetaCache() {
+        try {
+            var stored = Lampa.Storage.get(CACHE_KEY, {});
+            if (!stored || typeof stored !== 'object') return;
+            var t = nowMs(), keep = {};
+            Object.keys(stored).forEach(function (k) {
+                var e = stored[k];
+                if (e && typeof e.ts === 'number' && (t - e.ts) < CACHE_TTL) keep[k] = e;
+            });
+            _tmdbMeta = keep;
+        } catch (e) {}
+    }
+
+    function saveMetaCache() {
+        try {
+            var keys = Object.keys(_tmdbMeta);
+            if (keys.length > CACHE_MAX) {
+                // keep the freshest CACHE_MAX entries
+                keys.sort(function (a, b) { return _tmdbMeta[b].ts - _tmdbMeta[a].ts; });
+                var trimmed = {};
+                keys.slice(0, CACHE_MAX).forEach(function (k) { trimmed[k] = _tmdbMeta[k]; });
+                _tmdbMeta = trimmed;
+            }
+            Lampa.Storage.set(CACHE_KEY, _tmdbMeta);
+        } catch (e) {}
+    }
+
+    // Debounced persist (avoid hammering Storage during a burst of lookups).
+    function scheduleSave() {
+        if (_saveTimer) return;
+        _saveTimer = setTimeout(function () { _saveTimer = null; saveMetaCache(); }, 2000);
     }
 
     // Find {vote_average, poster_path, backdrop_path, tmdb_id} for a card title.
     function tmdbFindMeta(title, year, serial, cb) {
         var key = metaKey(title, year, serial);
-        if (Object.prototype.hasOwnProperty.call(_tmdbMeta, key)) { cb(_tmdbMeta[key]); return; }
+        var hit = _tmdbMeta[key];
+        if (hit && (nowMs() - hit.ts) < CACHE_TTL) { cb(hit.m); return; }
         var k = tmdbKey();
         if (!title || !k || !Lampa.TMDB || !Lampa.TMDB.api) { cb(null); return; }
 
@@ -411,7 +454,7 @@
                 tmdb_id:       m.id,
             } : null;
         }
-        function finish(meta) { _tmdbMeta[key] = meta; cb(meta); }
+        function finish(meta) { _tmdbMeta[key] = { m: meta, ts: nowMs() }; scheduleSave(); cb(meta); }
 
         tmdbGet(base + (year ? ('&' + yparam + '=' + year) : ''), function (data) {
             var meta = fromResults(data);
@@ -624,6 +667,32 @@
         return SOURCE_NAME + '?filter=' + cat + '&sort=' + sort;
     }
 
+    // "Continue watching" lane from Lampa history.
+    // type: null = all types (home); 'movie' | 'tv' | 'anime' = filtered (category).
+    // Lampa.Favorite.continues() already drops fully-viewed/thrown and filters by type.
+    function continueCards(type) {
+        if (!Lampa.Favorite) return [];
+        try {
+            if (type) return Lampa.Favorite.continues(type) || [];
+            // all types: history minus fully-viewed / thrown
+            var hist   = Lampa.Favorite.get({ type: 'history' }) || [];
+            var viewed = Lampa.Favorite.get({ type: 'viewed' })  || [];
+            var thrown = Lampa.Favorite.get({ type: 'thrown' })  || [];
+            return hist.filter(function (e) {
+                return !viewed.some(function (v) { return v.id == e.id; })
+                    && !thrown.some(function (t) { return t.id == e.id; });
+            }).slice(0, 19);
+        } catch (e) { return []; }
+    }
+
+    // Maps a Filmix catalog section to the Favorite.continues() type.
+    // s14 (cartoons) has no distinct history type in Lampa → treated as 'tv'.
+    function catToContinueType(cat) {
+        if (cat === 's0')  return 'movie';
+        if (cat === 's93') return 'anime';
+        return 'tv';   // s7, s14
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Source object
     // Lampa contract: methods receive (params, oncomplite, onerror)
@@ -649,10 +718,15 @@
 
             function finish() {
                 var data = results.filter(function (r) { return r && r.results && r.results.length; });
-                if (!data.length) { (onerror || function () {})(); return; }
-                // Enrich every card with TMDB rating/poster, then emit.
+                // "Continue watching" from history (all types) — first lane, already TMDB cards.
+                var cont = continueCards(null);
+                var contRow = cont.length ? { title: L('filmix_lane_continue'), results: cont } : null;
+                if (!data.length && !contRow) { (onerror || function () {})(); return; }
+                // Enrich catalog cards with TMDB rating/poster (history cards already have it), then emit.
                 var all = data.reduce(function (acc, r) { return acc.concat(r.results); }, []);
-                enrichCards(all, function () { oncomplite(data); });
+                enrichCards(all, function () {
+                    oncomplite(contRow ? [contRow].concat(data) : data);
+                });
             }
 
             rows.forEach(function (row, i) {
@@ -739,9 +813,14 @@
 
             function finish() {
                 var out = rows.filter(function (r) { return r && r.results && r.results.length; });
-                if (!out.length) { (onerror || function () {})(); return; }
+                // "Continue watching" filtered by this category's type — first lane.
+                var cont = continueCards(catToContinueType(cat));
+                var contRow = cont.length ? { title: L('filmix_lane_continue'), results: cont } : null;
+                if (!out.length && !contRow) { (onerror || function () {})(); return; }
                 var all = out.reduce(function (acc, r) { return acc.concat(r.results); }, []);
-                enrichCards(all, function () { oncomplite(out); });
+                enrichCards(all, function () {
+                    oncomplite(contRow ? [contRow].concat(out) : out);
+                });
             }
 
             // Fixed lanes; each lane paginates via its own "more" (category_full).
@@ -1214,6 +1293,7 @@
         window.filmix_plugin_loaded = true;
 
         registerLang();
+        loadMetaCache();
 
         Lampa.Api.sources[SOURCE_NAME] = Source;
         Object.defineProperty(Lampa.Api.sources, SOURCE_NAME, {
