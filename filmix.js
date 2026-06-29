@@ -64,9 +64,9 @@
 
     function catalogUrl(params) {
         var url = API_URL + 'catalog?' + authParams();
-        if (params.cat)  url += '&filter=' + params.cat;   // фильтр секции: s0/s7/s14/s93
-        if (params.sort) url += '&sort='   + params.sort;
-        if (params.page) url += '&page='   + params.page;
+        if (params.cat)  url += '&filter='  + params.cat;   // фильтр секции: s0/s7/s14/s93
+        if (params.sort) url += '&orderby=' + params.sort;  // date | rating | year | kp_rating
+        if (params.page) url += '&page='    + params.page;
         return url;
     }
 
@@ -326,24 +326,8 @@
                 else (onerror || function () {})();
             }
 
-            // Пагинация: догружаем "Последние" следующими страницами
-            var page = 1;
-            return function (resolve, reject) {
-                page++;
-                get(catalogUrl({ cat: cat, sort: 'date', page: page }),
-                    function (data) {
-                        if (Array.isArray(data) && data.length) {
-                            resolve([{
-                                title:   'Последние ' + name.toLowerCase() + ' — стр. ' + page,
-                                results: data.map(convertCard).filter(Boolean),
-                            }]);
-                        } else {
-                            (reject || function () {})();
-                        }
-                    },
-                    reject || function () {}
-                );
-            };
+            // Две фиксированные ленты — без пагинации (иначе появляются ряды «стр. N»)
+            return false;
         },
 
         // ── Список с пагинацией (component list): {results, total_pages} ──
