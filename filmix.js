@@ -184,16 +184,25 @@
 
         if (!title) { done(movie); return; }
 
-        var q = 'search/' + type + '?api_key=' + key + '&language=ru&query=' +
-            encodeURIComponent(title) + (year ? ('&' + yparam + '=' + year) : '');
+        var base = 'search/' + type + '?api_key=' + key + '&language=ru&query=' + encodeURIComponent(title);
 
-        tmdbGet(q, function (data) {
-            var match = pickTmdbMatch(data && data.results, title, year, serial);
-            if (!match) { done(movie); return; }
+        function fetchDetail(match) {
             tmdbGet(type + '/' + match.id + '?api_key=' + key + '&language=ru&append_to_response=external_ids',
                 function (det) { applyTmdb(movie, det, serial); done(movie); },
                 function ()    { applyTmdb(movie, match, serial); done(movie); }
             );
+        }
+
+        // 1) поиск с фильтром по году; 2) если не нашли — повтор без года
+        // (у сериалов Filmix год часто отличается от TMDB first_air_date)
+        tmdbGet(base + (year ? ('&' + yparam + '=' + year) : ''), function (data) {
+            var match = pickTmdbMatch(data && data.results, title, year, serial);
+            if (match) { fetchDetail(match); return; }
+            if (!year) { done(movie); return; }
+            tmdbGet(base, function (data2) {
+                var m2 = pickTmdbMatch(data2 && data2.results, title, year, serial);
+                if (m2) fetchDetail(m2); else done(movie);
+            }, function () { done(movie); });
         }, function () { done(movie); });
     }
 
