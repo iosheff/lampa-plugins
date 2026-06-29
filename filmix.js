@@ -605,13 +605,20 @@
             var cat    = parsed.cat;
             var name   = catTitle(cat);
 
-            var latestTitle = (cat === 's7')
-                ? L('filmix_lane_new_episodes')
-                : (L('filmix_lane_latest') + ' ' + name.toLowerCase());
-            var lanes = [
-                { title: latestTitle,                              sort: 'date'   },
-                { title: L('filmix_lane_top') + ' ' + name.toLowerCase(), sort: 'rating' },
-            ];
+            var lanes;
+            if (cat === 's7') {
+                // Series: "New episodes" (recent updates) + "New series" (newest titles) + "Top"
+                lanes = [
+                    { title: L('filmix_lane_new_episodes'),                    sort: 'date'   },
+                    { title: L('filmix_lane_new') + ' ' + name.toLowerCase(),  sort: 'year'   },
+                    { title: L('filmix_lane_top') + ' ' + name.toLowerCase(),  sort: 'rating' },
+                ];
+            } else {
+                lanes = [
+                    { title: L('filmix_lane_latest') + ' ' + name.toLowerCase(), sort: 'date'   },
+                    { title: L('filmix_lane_top') + ' ' + name.toLowerCase(),    sort: 'rating' },
+                ];
+            }
 
             // Initial load: both lanes in parallel
             var rows = new Array(lanes.length);
