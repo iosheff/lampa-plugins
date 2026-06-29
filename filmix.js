@@ -170,11 +170,54 @@
         if (imdb) movie.imdb_id = imdb;
     }
 
-    // Обогащает movie данными TMDB и зовёт done(movie) в любом случае
+    // TMDB-результат → Lampa card (source:'tmdb', откроется как карточка TMDB)
+    function tmdbCard(r) {
+        if (!r) return null;
+        var tv = !!(r.name || r.original_name || r.first_air_date) && !(r.title || r.release_date);
+        var card = {
+            id:            r.id,
+            source:        'tmdb',
+            poster_path:   r.poster_path   || '',
+            backdrop_path: r.backdrop_path || '',
+            vote_average:  r.vote_average  || 0,
+            overview:      r.overview      || '',
+        };
+        if (r.media_type) card.media_type = r.media_type;
+        if (tv) {
+            card.name           = r.name          || r.original_name || '';
+            card.original_name  = r.original_name || '';
+            card.first_air_date = r.first_air_date || '';
+        } else {
+            card.title          = r.title          || r.original_title || '';
+            card.original_title = r.original_title || '';
+            card.release_date   = r.release_date   || '';
+        }
+        return card;
+    }
+
+    // TMDB credits → {cast, crew} с фотографиями (profile_path)
+    function tmdbPersons(det, serial) {
+        var credits = (det && det.credits) || {};
+        var cast = (credits.cast || []).map(function (c) {
+            return { id: c.id, name: c.name, character: c.character || '', profile_path: c.profile_path || '', url: '' };
+        });
+        var crew = (credits.crew || []).map(function (c) {
+            return { id: c.id, name: c.name, job: c.job || '', profile_path: c.profile_path || '', url: '' };
+        });
+        // у сериалов режиссёров часто нет в crew — берём создателей
+        if (serial && det && det.created_by) {
+            det.created_by.forEach(function (p) {
+                crew.unshift({ id: p.id, name: p.name, job: 'Creator', profile_path: p.profile_path || '', url: '' });
+            });
+        }
+        return { cast: cast, crew: crew };
+    }
+
+    // Обогащает movie и отдаёт полный TMDB-объект (или null) в done(detail)
     function tmdbEnrichFull(movie, serial, done) {
-        if (!tmdbEnabled()) { done(movie); return; }
+        if (!tmdbEnabled()) { done(null); return; }
         var key = tmdbKey();
-        if (!key || !Lampa.TMDB || !Lampa.TMDB.api) { done(movie); return; }
+        if (!key || !Lampa.TMDB || !Lampa.TMDB.api) { done(null); return; }
 
         var title = serial ? (movie.original_name || movie.name) : (movie.original_title || movie.title);
         var dateF = serial ? movie.first_air_date : movie.release_date;
@@ -182,28 +225,28 @@
         var type  = serial ? 'tv' : 'movie';
         var yparam = serial ? 'first_air_date_year' : 'primary_release_year';
 
-        if (!title) { done(movie); return; }
+        if (!title) { done(null); return; }
 
-        var base = 'search/' + type + '?api_key=' + key + '&language=ru&query=' + encodeURIComponent(title);
+        var base   = 'search/' + type + '?api_key=' + key + '&language=ru&query=' + encodeURIComponent(title);
+        var append = 'credits,recommendations,similar,external_ids,videos';
 
         function fetchDetail(match) {
-            tmdbGet(type + '/' + match.id + '?api_key=' + key + '&language=ru&append_to_response=external_ids',
-                function (det) { applyTmdb(movie, det, serial); done(movie); },
-                function ()    { applyTmdb(movie, match, serial); done(movie); }
+            tmdbGet(type + '/' + match.id + '?api_key=' + key + '&language=ru&append_to_response=' + append,
+                function (det) { applyTmdb(movie, det, serial); done(det); },
+                function ()    { applyTmdb(movie, match, serial); done(null); }
             );
         }
 
         // 1) поиск с фильтром по году; 2) если не нашли — повтор без года
-        // (у сериалов Filmix год часто отличается от TMDB first_air_date)
         tmdbGet(base + (year ? ('&' + yparam + '=' + year) : ''), function (data) {
             var match = pickTmdbMatch(data && data.results, title, year, serial);
             if (match) { fetchDetail(match); return; }
-            if (!year) { done(movie); return; }
+            if (!year) { done(null); return; }
             tmdbGet(base, function (data2) {
                 var m2 = pickTmdbMatch(data2 && data2.results, title, year, serial);
-                if (m2) fetchDetail(m2); else done(movie);
-            }, function () { done(movie); });
-        }, function () { done(movie); });
+                if (m2) fetchDetail(m2); else done(null);
+            }, function () { done(null); });
+        }, function () { done(null); });
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -549,10 +592,26 @@
                         };
                     }
 
-                    // Обогащаем карточку данными TMDB (постер/фон/описание/imdb_id),
-                    // затем отдаём результат. При сбое TMDB — отдаём как есть.
+                    // Обогащаем карточку данными TMDB: рейтинги/постер/фон/описание
+                    // (в movie), а также актёры с фото, похожее, рекомендации, видео.
+                    // При сбое/без совпадения — отдаём данные Filmix как есть.
                     var serial = isSerial(data.section);
-                    tmdbEnrichFull(movie, serial, function () {
+                    tmdbEnrichFull(movie, serial, function (det) {
+                        if (det) {
+                            var persons = tmdbPersons(det, serial);
+                            if (persons.cast.length || persons.crew.length) result.persons = persons;
+
+                            var sim = ((det.similar && det.similar.results) || []).map(tmdbCard).filter(Boolean);
+                            if (sim.length) result.simular = { results: sim };
+
+                            var rec = ((det.recommendations && det.recommendations.results) || []).map(tmdbCard).filter(Boolean);
+                            if (rec.length) result.recomend = { results: rec };
+
+                            var vids = ((det.videos && det.videos.results) || [])
+                                .filter(function (v) { return v.site === 'YouTube' && v.key; })
+                                .map(function (v) { return { name: v.name, key: v.key, site: 'youtube', type: v.type }; });
+                            if (vids.length) result.videos = { results: vids };
+                        }
                         oncomplite(result);
                     });
                 },
