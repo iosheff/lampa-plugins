@@ -305,6 +305,20 @@
         return url.replace('/w140/', '/w400/').replace('/w220/', '/w400/');
     }
 
+    // Filmix отдаёт названия с HTML-сущностями («33 d&#237;as»). Декодируем,
+    // иначе поиск в TMDB не находит совпадений и редирект не срабатывает.
+    function decodeHtml(s) {
+        if (!s) return s;
+        return String(s)
+            .replace(/&#x([0-9a-fA-F]+);/g, function (_, h) { return String.fromCodePoint(parseInt(h, 16)); })
+            .replace(/&#(\d+);/g,          function (_, n) { return String.fromCodePoint(parseInt(n, 10)); })
+            .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+            .replace(/&laquo;/g, '«').replace(/&raquo;/g, '»')
+            .replace(/&mdash;/g, '—').replace(/&ndash;/g, '–')
+            .replace(/&amp;/g, '&');   // &amp; — последним, чтобы не двоить
+    }
+
     // Filmix отдаёт полные URL постеров. Lampa.Api.img всегда подставляет
     // TMDB-базу, поэтому НЕ задаём poster_path, а кладём полный URL в poster/img.
     function convertCard(item) {
@@ -313,6 +327,8 @@
         var serial  = isSerial(item.section);
         var year    = item.year ? String(item.year) : '';
         var poster  = posterLarge(item.poster);
+        var t_title = decodeHtml(item.title || '');
+        var t_orig  = decodeHtml(item.original_title || '');
         var genres  = (item.categories || []).map(function (name) { return { name: name }; });
         var rating  = parseFloat(item.kp_rating) || parseFloat(item.imdb_rating) || 0;
 
@@ -322,7 +338,7 @@
             alt_name:  item.alt_name || '',
             source:    SOURCE_NAME,          // критично: иначе клик уйдёт в tmdb
 
-            overview:  item.short_story || '',
+            overview:  decodeHtml(item.short_story || ''),
             genres:    genres,
             vote_average: rating,
             vote_count:   parseInt(item.kp_votes, 10) || 0,
@@ -340,16 +356,16 @@
 
         // method вычисляется Lampa как original_name ? 'tv' : 'movie'
         if (serial) {
-            card.name           = item.title          || item.original_title || '';
-            card.original_name  = item.original_title || item.title          || '';
+            card.name           = t_title || t_orig;
+            card.original_name  = t_orig  || t_title;
             // title тоже задаём: рендер полной карточки читает card.title.length
             // без проверки (на tv/movie это не влияет — оно по original_name)
-            card.title          = item.title          || item.original_title || '';
+            card.title          = t_title || t_orig;
             card.first_air_date = year ? year + '-01-01' : '';
             card.number_of_seasons = 1;
         } else {
-            card.title          = item.title          || item.original_title || '';
-            card.original_title = item.original_title || item.title          || '';
+            card.title          = t_title || t_orig;
+            card.original_title = t_orig  || t_title;
             card.release_date   = year ? year + '-01-01' : '';
         }
 
