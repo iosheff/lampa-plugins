@@ -191,6 +191,13 @@
     // Разбор параметров категории
     // cat может прийти как: params.genres ('s0'), либо в URL ?cat=s0
     // ─────────────────────────────────────────────────────────────
+    // url='tv'/'movie' (страницы темы) → секция Filmix
+    function urlToCat(url) {
+        if (url === 'tv')    return 's7';
+        if (url === 'movie') return 's0';
+        return null;
+    }
+
     function parseCat(params) {
         var cat  = 's0';
         var sort = 'date';
@@ -199,7 +206,12 @@
         if (params.sort)   sort = params.sort;
 
         var url = params.url || '';
-        var catM  = url.match(/[?&]cat=([^&]+)/);
+
+        // прямой маппинг страниц темы (url=tv / url=movie)
+        var mapped = urlToCat(url);
+        if (mapped) cat = mapped;
+
+        var catM  = url.match(/[?&](?:cat|filter)=([^&]+)/);
         var sortM = url.match(/[?&]sort=([^&]+)/);
         if (catM)  cat  = catM[1];
         if (sortM) sort = sortM[1];
@@ -279,36 +291,58 @@
             ]);
         },
 
-        // ── Категория (category_full): массив рядов + next() ──
+        // ── Категория (category): две ленты — Последние и Топ + next() ──
         category: function (params, oncomplite, onerror) {
             var parsed = parseCat(params);
             var cat    = parsed.cat;
-            var title  = catTitle(cat);
-            var page   = 0;
+            var name   = catTitle(cat);
 
-            // одна страница = один ряд (50 карточек)
-            function loadPage(ok, fail) {
+            var lanes = [
+                { title: 'Последние ' + name.toLowerCase(), sort: 'date'   },
+                { title: 'Топ ' + name.toLowerCase(),       sort: 'rating' },
+            ];
+
+            // Первая загрузка: обе ленты параллельно
+            var rows = new Array(lanes.length);
+            var done = 0;
+            lanes.forEach(function (lane, i) {
+                get(catalogUrl({ cat: cat, sort: lane.sort, page: 1 }),
+                    function (data) {
+                        if (Array.isArray(data) && data.length) {
+                            rows[i] = {
+                                title:   lane.title,
+                                results: data.map(convertCard).filter(Boolean),
+                            };
+                        }
+                        if (++done === lanes.length) finish();
+                    },
+                    function () { if (++done === lanes.length) finish(); }
+                );
+            });
+
+            function finish() {
+                var out = rows.filter(function (r) { return r && r.results && r.results.length; });
+                if (out.length) oncomplite(out);
+                else (onerror || function () {})();
+            }
+
+            // Пагинация: догружаем "Последние" следующими страницами
+            var page = 1;
+            return function (resolve, reject) {
                 page++;
                 get(catalogUrl({ cat: cat, sort: 'date', page: page }),
                     function (data) {
                         if (Array.isArray(data) && data.length) {
-                            ok([{
-                                title:   title + (page > 1 ? ' — стр. ' + page : ''),
+                            resolve([{
+                                title:   'Последние ' + name.toLowerCase() + ' — стр. ' + page,
                                 results: data.map(convertCard).filter(Boolean),
                             }]);
                         } else {
-                            (fail || function () {})();
+                            (reject || function () {})();
                         }
                     },
-                    fail || function () {}
+                    reject || function () {}
                 );
-            }
-
-            loadPage(oncomplite, onerror);
-
-            // функция пагинации для onNext
-            return function (resolve, reject) {
-                loadPage(resolve, reject);
             };
         },
 
