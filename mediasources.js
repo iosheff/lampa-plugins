@@ -365,6 +365,86 @@
         }, function () { done(null); }, function (d) { return d && d.results; });
     }
 
+    // Run async tasks with a concurrency limit; call done() when all finish.
+    // Each task is function(finish) and must call finish() exactly once.
+    function runLimited(tasks, limit, done) {
+        var total = tasks.length, i = 0, active = 0, finished = 0;
+        if (!total) { done(); return; }
+        function pump() {
+            while (active < limit && i < total) {
+                var task = tasks[i++];
+                active++;
+                task(function () {
+                    active--; finished++;
+                    if (finished === total) done();
+                    else pump();
+                });
+            }
+        }
+        pump();
+    }
+
+    // Cache of TMDB metadata by title+year (null = no match). Keeps lane/list
+    // enrichment cheap on re-scroll and gives the redirect an instant tmdb_id.
+    var _tmdbMeta = {};
+    function metaKey(title, year, serial) {
+        return (serial ? 'tv:' : 'mv:') + (title || '').toLowerCase().trim() + '|' + (year || '');
+    }
+
+    // Find {vote_average, poster_path, backdrop_path, tmdb_id} for a card title.
+    function tmdbFindMeta(title, year, serial, cb) {
+        var key = metaKey(title, year, serial);
+        if (Object.prototype.hasOwnProperty.call(_tmdbMeta, key)) { cb(_tmdbMeta[key]); return; }
+        var k = tmdbKey();
+        if (!title || !k || !Lampa.TMDB || !Lampa.TMDB.api) { cb(null); return; }
+
+        var type   = serial ? 'tv' : 'movie';
+        var yparam = serial ? 'first_air_date_year' : 'primary_release_year';
+        var base   = 'search/' + type + '?api_key=' + k + '&language=ru&query=' + encodeURIComponent(title);
+
+        function fromResults(data) {
+            var m = pickTmdbMatch(data && data.results, title, year, serial);
+            return m ? {
+                vote_average:  m.vote_average  || 0,
+                poster_path:   m.poster_path   || '',
+                backdrop_path: m.backdrop_path || '',
+                tmdb_id:       m.id,
+            } : null;
+        }
+        function finish(meta) { _tmdbMeta[key] = meta; cb(meta); }
+
+        tmdbGet(base + (year ? ('&' + yparam + '=' + year) : ''), function (data) {
+            var meta = fromResults(data);
+            if (meta) { finish(meta); return; }
+            if (!year) { finish(null); return; }
+            tmdbGet(base, function (d2) { finish(fromResults(d2)); }, function () { finish(null); },
+                function (d) { return d && d.results; });
+        }, function () { finish(null); }, function (d) { return d && d.results; });
+    }
+
+    // Enrich a list of cards with TMDB rating/poster/backdrop/tmdb_id, then done().
+    // No-op (instant) when TMDB cards are disabled.
+    function enrichCards(cards, done) {
+        if (!tmdbEnabled() || !cards || !cards.length) { done(); return; }
+        var tasks = cards.map(function (card) {
+            return function (finish) {
+                var serial = !!card.original_name;
+                var title  = serial ? (card.original_name || card.name) : (card.original_title || card.title);
+                var year   = ((serial ? card.first_air_date : card.release_date) || '').slice(0, 4);
+                tmdbFindMeta(title, year, serial, function (meta) {
+                    if (meta) {
+                        if (meta.vote_average)  card.vote_average  = meta.vote_average;
+                        if (meta.poster_path)   card.poster_path   = meta.poster_path;
+                        if (meta.backdrop_path) card.backdrop_path = meta.backdrop_path;
+                        if (meta.tmdb_id)       card.tmdb_id       = meta.tmdb_id;
+                    }
+                    finish();
+                });
+            };
+        });
+        runLimited(tasks, 8, done);
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Card normalization: Filmix API → Lampa card
     // ─────────────────────────────────────────────────────────────
@@ -538,6 +618,12 @@
         })[cat] || L('filmix_cat_default');
     }
 
+    // Activity url for a lane's "more" → category_full → list().
+    // filter=/sort= are parsed authoritatively by parseCat().
+    function laneUrl(cat, sort) {
+        return SOURCE_NAME + '?filter=' + cat + '&sort=' + sort;
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Source object
     // Lampa contract: methods receive (params, oncomplite, onerror)
@@ -563,8 +649,10 @@
 
             function finish() {
                 var data = results.filter(function (r) { return r && r.results && r.results.length; });
-                if (data.length) oncomplite(data);
-                else (onerror || function () {})();
+                if (!data.length) { (onerror || function () {})(); return; }
+                // Enrich every card with TMDB rating/poster, then emit.
+                var all = data.reduce(function (acc, r) { return acc.concat(r.results); }, []);
+                enrichCards(all, function () { oncomplite(data); });
             }
 
             rows.forEach(function (row, i) {
@@ -572,9 +660,14 @@
                     function (data) {
                         if (Array.isArray(data) && data.length) {
                             results[i] = {
-                                title:   row.title,
-                                genres:  row.genres,   // for onMore → category
-                                results: data.map(convertCard).filter(Boolean),
+                                title:       row.title,
+                                genres:      row.genres,                  // for onMore → category
+                                sort:        row.sort,
+                                url:         laneUrl(row.cat, row.sort),  // "more" → category_full
+                                page:        1,
+                                total_pages: 999,                         // >1 so the "more" element appears
+                                source:      SOURCE_NAME,
+                                results:     data.map(convertCard).filter(Boolean),
                             };
                         }
                         if (++done === rows.length) finish();
@@ -585,7 +678,7 @@
                 );
             });
 
-            // no pagination on the home screen
+            // no pagination on the home screen itself (each lane has its own "more")
             return false;
         },
 
@@ -620,7 +713,7 @@
                 ];
             }
 
-            // Initial load: both lanes in parallel
+            // Initial load: all lanes in parallel
             var rows = new Array(lanes.length);
             var done = 0;
             lanes.forEach(function (lane, i) {
@@ -628,8 +721,14 @@
                     function (data) {
                         if (Array.isArray(data) && data.length) {
                             rows[i] = {
-                                title:   lane.title,
-                                results: data.map(convertCard).filter(Boolean),
+                                title:       lane.title,
+                                genres:      cat,
+                                sort:        lane.sort,
+                                url:         laneUrl(cat, lane.sort),  // "more" → category_full → list()
+                                page:        1,
+                                total_pages: 999,                      // >1 so the "more" element appears
+                                source:      SOURCE_NAME,
+                                results:     data.map(convertCard).filter(Boolean),
                             };
                         }
                         if (++done === lanes.length) finish();
@@ -640,11 +739,12 @@
 
             function finish() {
                 var out = rows.filter(function (r) { return r && r.results && r.results.length; });
-                if (out.length) oncomplite(out);
-                else (onerror || function () {})();
+                if (!out.length) { (onerror || function () {})(); return; }
+                var all = out.reduce(function (acc, r) { return acc.concat(r.results); }, []);
+                enrichCards(all, function () { oncomplite(out); });
             }
 
-            // Two fixed lanes — no pagination (otherwise "page N" rows appear)
+            // Fixed lanes; each lane paginates via its own "more" (category_full).
             return false;
         },
 
@@ -659,10 +759,13 @@
                         (onerror || function () {})();
                         return;
                     }
-                    oncomplite({
-                        results:     data.map(convertCard).filter(Boolean),
-                        total_pages: 999,   // API does not report the page count
-                        page:        page,
+                    var cards = data.map(convertCard).filter(Boolean);
+                    enrichCards(cards, function () {
+                        oncomplite({
+                            results:     cards,
+                            total_pages: 999,   // API does not report the page count
+                            page:        page,
+                        });
                     });
                 },
                 onerror || function () {}
@@ -795,6 +898,20 @@
             if (tmdbEnabled() && tmdbRedirect()) {
                 var rc      = params.card || {};
                 var rserial = !!(rc.original_name || rc.name) || params.method === 'tv';
+
+                function redirectTo(tmdbId) {
+                    Lampa.Activity.replace({
+                        component: 'full',
+                        source:    'tmdb',
+                        id:        tmdbId,
+                        method:    rserial ? 'tv' : 'movie',
+                        card:      { id: tmdbId, source: 'tmdb' },
+                    });
+                }
+
+                // tmdb_id already resolved during lane enrichment → redirect instantly
+                if (rc.tmdb_id) { redirectTo(rc.tmdb_id); return; }
+
                 var rtitle  = rserial
                     ? (rc.original_name || rc.name || rc.original_title || rc.title)
                     : (rc.original_title || rc.title || rc.name);
@@ -802,17 +919,8 @@
 
                 if (rtitle) {
                     tmdbFindId(rtitle, ryear, rserial, function (tmdbId) {
-                        if (tmdbId) {
-                            Lampa.Activity.replace({
-                                component: 'full',
-                                source:    'tmdb',
-                                id:        tmdbId,
-                                method:    rserial ? 'tv' : 'movie',
-                                card:      { id: tmdbId, source: 'tmdb' },
-                            });
-                        } else {
-                            loadFilmix();   // no TMDB match — our card
-                        }
+                        if (tmdbId) redirectTo(tmdbId);
+                        else loadFilmix();   // no TMDB match — our card
                     });
                     return;
                 }
