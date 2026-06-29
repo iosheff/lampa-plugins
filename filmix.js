@@ -103,6 +103,101 @@
     }
 
     // ─────────────────────────────────────────────────────────────
+    // TMDB-обогащение карточек (Вариант A)
+    // Каталог остаётся Filmix, но полная карточка дополняется данными
+    // TMDB: постер/фон/описание/рейтинг + imdb_id (нужен online_mod для
+    // сопоставления и запуска плеера). Запросы идут через прокси Lampa,
+    // при сбое — напрямую на api.themoviedb.org.
+    // ─────────────────────────────────────────────────────────────
+    function tmdbEnabled() {
+        // по умолчанию включено
+        var v = Lampa.Storage.field('filmix_tmdb_cards');
+        return v === undefined ? true : !!v;
+    }
+
+    function tmdbKey() {
+        try { return (Lampa.TMDB && Lampa.TMDB.key) ? Lampa.TMDB.key() : ''; }
+        catch (e) { return ''; }
+    }
+
+    // Запрос к TMDB: сначала прокси Lampa, при ошибке — прямой api.themoviedb.org
+    function tmdbGet(path, onok, onerr) {
+        var done = false;
+        function ok(d)  { if (!done) { done = true; onok(d); } }
+        function fail() { (onerr || function () {})(); }
+
+        var net1 = new Lampa.Reguest();
+        net1.silent(Lampa.TMDB.api(path), ok, function () {
+            var net2 = new Lampa.Reguest();
+            net2.silent('https://api.themoviedb.org/3/' + path, ok, fail);
+        });
+    }
+
+    // Выбор лучшего совпадения: точное original-название → совпадение года → первый
+    function pickTmdbMatch(results, title, year, serial) {
+        if (!results || !results.length) return null;
+        var t = (title || '').toLowerCase().trim();
+
+        function origOf(r) {
+            return ((serial ? r.original_name : r.original_title) || r.original_name || r.original_title || '').toLowerCase().trim();
+        }
+        function yearOf(r) {
+            return ((serial ? r.first_air_date : r.release_date) || '').slice(0, 4);
+        }
+
+        var exact = results.filter(function (r) { return origOf(r) === t; });
+        var pool  = exact.length ? exact : results;
+
+        if (year) {
+            var byYear = pool.filter(function (r) { return yearOf(r) === String(year); });
+            if (byYear.length) return byYear[0];
+        }
+        return pool[0];
+    }
+
+    function applyTmdb(movie, det, serial) {
+        if (!det) return;
+        movie.tmdb_id = det.id;
+        if (det.poster_path)   movie.poster_path   = det.poster_path;   // TMDB-постер
+        if (det.backdrop_path) movie.backdrop_path = det.backdrop_path;
+        if (det.overview)      movie.overview      = det.overview;
+        if (det.vote_average)  movie.vote_average  = det.vote_average;
+        if (det.vote_count)    movie.vote_count    = det.vote_count;
+        if (det.genres && det.genres.length) {
+            movie.genres = det.genres.map(function (g) { return { id: g.id, name: g.name }; });
+        }
+        var imdb = (det.external_ids && det.external_ids.imdb_id) || det.imdb_id || '';
+        if (imdb) movie.imdb_id = imdb;
+    }
+
+    // Обогащает movie данными TMDB и зовёт done(movie) в любом случае
+    function tmdbEnrichFull(movie, serial, done) {
+        if (!tmdbEnabled()) { done(movie); return; }
+        var key = tmdbKey();
+        if (!key || !Lampa.TMDB || !Lampa.TMDB.api) { done(movie); return; }
+
+        var title = serial ? (movie.original_name || movie.name) : (movie.original_title || movie.title);
+        var dateF = serial ? movie.first_air_date : movie.release_date;
+        var year  = (dateF || '').slice(0, 4);
+        var type  = serial ? 'tv' : 'movie';
+        var yparam = serial ? 'first_air_date_year' : 'primary_release_year';
+
+        if (!title) { done(movie); return; }
+
+        var q = 'search/' + type + '?api_key=' + key + '&language=ru&query=' +
+            encodeURIComponent(title) + (year ? ('&' + yparam + '=' + year) : '');
+
+        tmdbGet(q, function (data) {
+            var match = pickTmdbMatch(data && data.results, title, year, serial);
+            if (!match) { done(movie); return; }
+            tmdbGet(type + '/' + match.id + '?api_key=' + key + '&language=ru&append_to_response=external_ids',
+                function (det) { applyTmdb(movie, det, serial); done(movie); },
+                function ()    { applyTmdb(movie, match, serial); done(movie); }
+            );
+        }, function () { done(movie); });
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Нормализация карточки: Filmix API → Lampa card
     // ─────────────────────────────────────────────────────────────
 
@@ -445,7 +540,12 @@
                         };
                     }
 
-                    oncomplite(result);
+                    // Обогащаем карточку данными TMDB (постер/фон/описание/imdb_id),
+                    // затем отдаём результат. При сбое TMDB — отдаём как есть.
+                    var serial = isSerial(data.section);
+                    tmdbEnrichFull(movie, serial, function () {
+                        oncomplite(result);
+                    });
                 },
                 onerror || function () {}
             );
@@ -662,6 +762,20 @@
                 Lampa.Noty.show((value || '').trim()
                     ? 'Filmix: токен сохранён'
                     : 'Filmix: токен очищен');
+            },
+        });
+
+        // Переключатель TMDB-обогащения карточек
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: {
+                name:      'filmix_tmdb_cards',
+                type:      'trigger',
+                'default': true,
+            },
+            field: {
+                name:        'Карточки TMDB',
+                description: 'Дополнять открытую карточку данными TMDB (постер, фон, описание, рейтинг, imdb_id для онлайн-плагинов).',
             },
         });
 
