@@ -84,6 +84,8 @@
 
     function postUrl(id)   { return API_URL + 'post/'   + id + '?' + authParams(); }
     function personUrl(id) { return API_URL + 'person/' + id + '?' + authParams(); }
+    function tokenRequestUrl()      { return API_URL + 'token_request?'        + authParams(); }
+    function tokenRequestCheckUrl(code) { return API_URL + 'token_request/check?code=' + encodeURIComponent(code) + '&' + authParams(); }
 
     // ─────────────────────────────────────────────────────────────
     // Нормализация карточки: Filmix API → Lampa card
@@ -537,6 +539,62 @@
     };
 
     // ─────────────────────────────────────────────────────────────
+    // Device activation flow (Smart TV–стиль):
+    //   1. Запрашиваем token_request → получаем user_code (4 буквы)
+    //   2. Показываем пользователю код и ссылку filmix.me/activate
+    //   3. Опрашиваем token_request/check каждые 5 сек
+    //   4. Когда user_dev_token вернётся — сохраняем и прекращаем опрос
+    // ─────────────────────────────────────────────────────────────
+    var _activationTimer = null;
+
+    function stopActivation() {
+        if (_activationTimer) { clearInterval(_activationTimer); _activationTimer = null; }
+    }
+
+    function startDeviceActivation() {
+        stopActivation();
+        Lampa.Noty.show('Filmix: запрашиваю код активации…');
+        fetch(tokenRequestUrl())
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || data.status !== 'ok' || !data.code) {
+                    Lampa.Noty.show('Filmix: не удалось получить код. Попробуйте позже.');
+                    return;
+                }
+                var code     = data.code;
+                var userCode = data.user_code || '';
+                Lampa.Noty.show(
+                    'Filmix: откройте filmix.me, войдите в аккаунт и введите код: ' + userCode
+                );
+
+                var attempts = 0;
+                var MAX = 60; // 5 мин максимум
+                _activationTimer = setInterval(function () {
+                    attempts++;
+                    if (attempts > MAX) {
+                        stopActivation();
+                        Lampa.Noty.show('Filmix: время ожидания истекло. Повторите привязку.');
+                        return;
+                    }
+                    fetch(tokenRequestCheckUrl(code))
+                        .then(function (r) { return r.json(); })
+                        .then(function (resp) {
+                            var newToken = resp && (resp.user_dev_token || resp.token);
+                            if (newToken) {
+                                stopActivation();
+                                Lampa.Storage.set('filmix_token', newToken);
+                                Lampa.Noty.show('Filmix: аккаунт привязан! Токен сохранён ✓');
+                            }
+                        })
+                        .catch(function () {});
+                }, 5000);
+            })
+            .catch(function () {
+                Lampa.Noty.show('Filmix: ошибка сети. Проверьте подключение.');
+            });
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Раздел настроек «MediaSources» (через Lampa.SettingsApi)
     // Токен НЕ хранится в коде — вводится пользователем и сохраняется
     // в Lampa.Storage['filmix_token'] (его читает token()).
@@ -577,6 +635,17 @@
                     ? 'Filmix: токен сохранён'
                     : 'Filmix: токен очищен');
             },
+        });
+
+        // Кнопка привязки аккаунта через device activation flow
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param:     { type: 'button' },
+            field: {
+                name:        'Привязать аккаунт Filmix',
+                description: 'Получить токен автоматически. Откроется код — введите его на filmix.me в разделе «Устройства».',
+            },
+            onChange:  startDeviceActivation,
         });
 
         // Кнопка проверки токена
