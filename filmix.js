@@ -195,6 +195,7 @@
         if (tv) {
             card.name           = r.name          || r.original_name || '';
             card.original_name  = r.original_name || '';
+            card.title          = r.name          || r.original_name || '';
             card.first_air_date = r.first_air_date || '';
         } else {
             card.title          = r.title          || r.original_title || '';
@@ -311,6 +312,9 @@
         if (serial) {
             card.name           = item.title          || item.original_title || '';
             card.original_name  = item.original_title || item.title          || '';
+            // title тоже задаём: рендер полной карточки читает card.title.length
+            // без проверки (на tv/movie это не влияет — оно по original_name)
+            card.title          = item.title          || item.original_title || '';
             card.first_air_date = year ? year + '-01-01' : '';
             card.number_of_seasons = 1;
         } else {
