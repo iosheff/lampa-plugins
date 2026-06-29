@@ -16,6 +16,80 @@
         '<path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="1.6"/>' +
         '<path d="M4 9h16M9 5v14M15 5v14" stroke="currentColor" stroke-width="1.6"/></svg>';
 
+    // ─────────────────────────────────────────────────────────────
+    // i18n — English is the base language, Russian is a translation.
+    // Strings are resolved via Lampa.Lang (it follows the UI language and
+    // falls back to English automatically). L() also falls back to the
+    // English value from the dictionary if Lampa.Lang is unavailable.
+    // ─────────────────────────────────────────────────────────────
+    var LANG = {
+        // Catalog / lanes
+        filmix_cat_movies:    { en: 'Movies',   ru: 'Фильмы' },
+        filmix_cat_series:    { en: 'Series',   ru: 'Сериалы' },
+        filmix_cat_cartoons:  { en: 'Cartoons', ru: 'Мультфильмы' },
+        filmix_cat_anime:     { en: 'Anime',    ru: 'Аниме' },
+        filmix_cat_default:   { en: 'Catalog',  ru: 'Каталог' },
+        filmix_lane_new:      { en: 'New',      ru: 'Новые' },
+        filmix_lane_top:      { en: 'Top',      ru: 'Топ' },
+        filmix_lane_latest:   { en: 'Latest',   ru: 'Последние' },
+        filmix_lane_new_episodes: { en: 'New episodes', ru: 'Новые серии' },
+        filmix_season:        { en: 'Season',   ru: 'Сезон' },
+        filmix_episode:       { en: 'Episode',  ru: 'Серия' },
+        filmix_trailer:       { en: 'Trailer',  ru: 'Трейлер' },
+        filmix_filmography:   { en: 'Filmography', ru: 'Фильмография' },
+
+        // Settings
+        filmix_token_name:        { en: 'Filmix token', ru: 'Токен Filmix' },
+        filmix_token_desc:        { en: 'Required for search. You can obtain it via the Filmix app/site.',
+                                    ru: 'Нужен для поиска. Получить можно в приложении/на сайте Filmix.' },
+        filmix_token_placeholder: { en: 'Paste your Filmix token', ru: 'Вставьте токен Filmix' },
+        filmix_tmdb_cards_name:   { en: 'TMDB cards', ru: 'Карточки TMDB' },
+        filmix_tmdb_cards_desc:   { en: 'Enrich the opened card with TMDB data (poster, backdrop, overview, rating, imdb_id for online plugins).',
+                                    ru: 'Дополнять открытую карточку данными TMDB (постер, фон, описание, рейтинг, imdb_id для онлайн-плагинов).' },
+        filmix_redirect_name:     { en: 'Open card in TMDB', ru: 'Открывать карточку в TMDB' },
+        filmix_redirect_desc:     { en: 'List comes from Filmix, the card opens as a native TMDB card (reviews, seasons and episodes, recommendations). If there is no TMDB match — the Filmix card is shown.',
+                                    ru: 'Список из Filmix, а карточка открывается как родная TMDB (отзывы, сезоны и серии, рекомендации). Если совпадения в TMDB нет — показывается карточка Filmix.' },
+        filmix_link_name:         { en: 'Link Filmix account', ru: 'Привязать аккаунт Filmix' },
+        filmix_link_desc:         { en: 'Obtain a token automatically. A code will appear — enter it on filmix.me under "Devices".',
+                                    ru: 'Получить токен автоматически. Откроется код — введите его на filmix.me в разделе «Устройства».' },
+        filmix_check_name:        { en: 'Check token', ru: 'Проверить токен' },
+
+        // Notifications
+        filmix_noty_need_token:   { en: 'Filmix: a token is required for search (Settings → MediaSources).',
+                                    ru: 'Filmix: для поиска нужен токен (Настройки → MediaSources).' },
+        filmix_noty_token_saved:  { en: 'Filmix: token saved', ru: 'Filmix: токен сохранён' },
+        filmix_noty_token_cleared:{ en: 'Filmix: token cleared', ru: 'Filmix: токен очищен' },
+        filmix_noty_token_not_set:{ en: 'Filmix: token is not set', ru: 'Filmix: токен не задан' },
+        filmix_noty_checking:     { en: 'Filmix: checking the token…', ru: 'Filmix: проверяю токен…' },
+        filmix_noty_token_works:  { en: 'Filmix: token works ✓', ru: 'Filmix: токен работает ✓' },
+        filmix_noty_token_empty:  { en: 'Filmix: token accepted, but search is empty', ru: 'Filmix: токен принят, но поиск пуст' },
+        filmix_noty_token_invalid:{ en: 'Filmix: token is invalid ✗', ru: 'Filmix: токен недействителен ✗' },
+        filmix_noty_requesting:   { en: 'Filmix: requesting an activation code…', ru: 'Filmix: запрашиваю код активации…' },
+        filmix_noty_code_fail:    { en: 'Filmix: failed to get a code. Try again later.', ru: 'Filmix: не удалось получить код. Попробуйте позже.' },
+        filmix_noty_timeout:      { en: 'Filmix: timed out. Please retry the linking.', ru: 'Filmix: время ожидания истекло. Повторите привязку.' },
+        filmix_noty_linked:       { en: 'Filmix: account linked! Token saved ✓', ru: 'Filmix: аккаунт привязан! Токен сохранён ✓' },
+        filmix_noty_net_error:    { en: 'Filmix: network error. Check your connection.', ru: 'Filmix: ошибка сети. Проверьте подключение.' },
+
+        // Device-linking dialog
+        filmix_link_dialog_title: { en: 'Filmix linking — code:', ru: 'Привязка Filmix — код:' },
+        filmix_link_your_code:    { en: 'Your code:', ru: 'Ваш код:' },
+        filmix_link_instr:        { en: 'Open filmix.me → "Profile" → "Devices" and enter this code',
+                                    ru: 'Откройте filmix.me → «Профиль» → «Устройства» и введите этот код' },
+        filmix_close:             { en: 'Close', ru: 'Закрыть' },
+    };
+
+    function L(key) {
+        if (Lampa.Lang && Lampa.Lang.translate) {
+            var v = Lampa.Lang.translate(key);
+            if (v && v !== key) return v;
+        }
+        return (LANG[key] && LANG[key].en) || key;
+    }
+
+    function registerLang() {
+        if (Lampa.Lang && Lampa.Lang.add) Lampa.Lang.add(LANG);
+    }
+
     // Fixed device_id, one per device
     var DEVICE_ID = (function () {
         var id = Lampa.Storage.field('filmix_device_id');
@@ -400,7 +474,7 @@
                     id:             card.id + '_' + seasonNum + '_' + epNum,
                     season_number:  +seasonNum,
                     episode_number: +epNum,
-                    name:           'Episode ' + epNum,
+                    name:           L('filmix_episode') + ' ' + epNum,
                     overview:       '',
                     air_date:       '',
                     still_path:     '',
@@ -457,11 +531,11 @@
 
     function catTitle(cat) {
         return ({
-            s0:  'Movies',
-            s7:  'Series',
-            s14: 'Cartoons',
-            s93: 'Anime',
-        })[cat] || 'Catalog';
+            s0:  L('filmix_cat_movies'),
+            s7:  L('filmix_cat_series'),
+            s14: L('filmix_cat_cartoons'),
+            s93: L('filmix_cat_anime'),
+        })[cat] || L('filmix_cat_default');
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -474,13 +548,14 @@
 
         // ── Home screen: array of rows [{title, results:[...]}] ──
         main: function (params, oncomplite, onerror) {
+            var nw = L('filmix_lane_new'), tp = L('filmix_lane_top');
             var rows = [
-                { title: 'New movies',  cat: 's0',  sort: 'date',   genres: 's0'  },
-                { title: 'New series',  cat: 's7',  sort: 'date',   genres: 's7'  },
-                { title: 'Top movies',  cat: 's0',  sort: 'rating', genres: 's0'  },
-                { title: 'Top series',  cat: 's7',  sort: 'rating', genres: 's7'  },
-                { title: 'Cartoons',    cat: 's14', sort: 'date',   genres: 's14' },
-                { title: 'Anime',       cat: 's93', sort: 'date',   genres: 's93' },
+                { title: nw + ' ' + catTitle('s0').toLowerCase(), cat: 's0',  sort: 'date',   genres: 's0'  },
+                { title: nw + ' ' + catTitle('s7').toLowerCase(), cat: 's7',  sort: 'date',   genres: 's7'  },
+                { title: tp + ' ' + catTitle('s0').toLowerCase(), cat: 's0',  sort: 'rating', genres: 's0'  },
+                { title: tp + ' ' + catTitle('s7').toLowerCase(), cat: 's7',  sort: 'rating', genres: 's7'  },
+                { title: catTitle('s14'),                         cat: 's14', sort: 'date',   genres: 's14' },
+                { title: catTitle('s93'),                         cat: 's93', sort: 'date',   genres: 's93' },
             ];
 
             var results = new Array(rows.length);
@@ -517,10 +592,10 @@
         // ── Catalog menu: [{title, id}] ──
         menu: function (params, oncomplite) {
             oncomplite([
-                { title: 'Movies',   id: 's0'  },
-                { title: 'Series',   id: 's7'  },
-                { title: 'Cartoons', id: 's14' },
-                { title: 'Anime',    id: 's93' },
+                { title: catTitle('s0'),  id: 's0'  },
+                { title: catTitle('s7'),  id: 's7'  },
+                { title: catTitle('s14'), id: 's14' },
+                { title: catTitle('s93'), id: 's93' },
             ]);
         },
 
@@ -530,10 +605,12 @@
             var cat    = parsed.cat;
             var name   = catTitle(cat);
 
-            var latestTitle = (cat === 's7') ? 'Новые серии' : ('Latest ' + name.toLowerCase());
+            var latestTitle = (cat === 's7')
+                ? L('filmix_lane_new_episodes')
+                : (L('filmix_lane_latest') + ' ' + name.toLowerCase());
             var lanes = [
-                { title: latestTitle,                  sort: 'date'   },
-                { title: 'Top ' + name.toLowerCase(),  sort: 'rating' },
+                { title: latestTitle,                              sort: 'date'   },
+                { title: L('filmix_lane_top') + ' ' + name.toLowerCase(), sort: 'rating' },
             ];
 
             // Initial load: both lanes in parallel
@@ -668,7 +745,7 @@
                     var videos = {
                         results: trailers.map(function (t, i) {
                             return {
-                                name: 'Trailer ' + (i + 1),
+                                name: L('filmix_trailer') + ' ' + (i + 1),
                                 key:  (t && t.link) ? t.link : t,
                                 site: 'direct', type: 'Trailer',
                             };
@@ -693,7 +770,7 @@
                         result.episodes = {
                             episodes:      built.episodes,
                             seasons_count: built.seasons_count,
-                            name:          'Season ' + firstSeason,
+                            name:          L('filmix_season') + ' ' + firstSeason,
                         };
                     }
 
@@ -775,7 +852,7 @@
             if (!query) { oncomplite({ movie: { results: [] }, tv: { results: [] } }); return; }
 
             if (!token()) {
-                Lampa.Noty.show('Filmix: a token is required for search (Settings → MediaSources).');
+                Lampa.Noty.show(L('filmix_noty_need_token'));
                 oncomplite({ movie: { results: [] }, tv: { results: [] } });
                 return;
             }
@@ -815,7 +892,7 @@
                         },
                         credits: {
                             knownFor: movies.length ? [
-                                { name: data.career || 'Filmography', credits: movies },
+                                { name: data.career || L('filmix_filmography'), credits: movies },
                             ] : [],
                         },
                     });
@@ -854,12 +931,12 @@
 
     function startDeviceActivation() {
         stopActivation();
-        Lampa.Noty.show('Filmix: requesting an activation code…');
+        Lampa.Noty.show(L('filmix_noty_requesting'));
         fetch(tokenRequestUrl())
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (!data || data.status !== 'ok' || !data.code) {
-                    Lampa.Noty.show('Filmix: failed to get a code. Try again later.');
+                    Lampa.Noty.show(L('filmix_noty_code_fail'));
                     return;
                 }
                 // The long code is the candidate token. It becomes valid as soon
@@ -869,11 +946,11 @@
 
                 // Show a dialog that stays on screen until the token is received
                 Lampa.Select.show({
-                    title: 'Filmix linking — code: ' + userCode,
+                    title: L('filmix_link_dialog_title') + ' ' + userCode,
                     items: [
-                        { title: 'Your code: ' + userCode },
-                        { title: 'Open filmix.me → "Profile" → "Devices" and enter this code' },
-                        { title: 'Close', cancel: true },
+                        { title: L('filmix_link_your_code') + ' ' + userCode },
+                        { title: L('filmix_link_instr') },
+                        { title: L('filmix_close'), cancel: true },
                     ],
                     onSelect: function () { stopActivation(); Lampa.Controller.toggle('settings_component'); },
                     onBack:   function () { stopActivation(); Lampa.Controller.toggle('settings_component'); },
@@ -885,7 +962,7 @@
                     attempts++;
                     if (attempts > MAX) {
                         stopActivation();
-                        Lampa.Noty.show('Filmix: timed out. Please retry the linking.');
+                        Lampa.Noty.show(L('filmix_noty_timeout'));
                         return;
                     }
                     // Poll user_profile with the candidate token.
@@ -897,14 +974,14 @@
                                 stopActivation();
                                 Lampa.Storage.set('filmix_token', candidateToken);
                                 if (Lampa.Controller) Lampa.Controller.toggle('settings_component');
-                                Lampa.Noty.show('Filmix: account linked! Token saved ✓');
+                                Lampa.Noty.show(L('filmix_noty_linked'));
                             }
                         })
                         .catch(function () {});
                 }, 5000);
             })
             .catch(function () {
-                Lampa.Noty.show('Filmix: network error. Check your connection.');
+                Lampa.Noty.show(L('filmix_noty_net_error'));
             });
     }
 
@@ -937,17 +1014,17 @@
                 type:        'input',
                 values:      '',
                 'default':   '',
-                placeholder: 'Paste your Filmix token',
+                placeholder: L('filmix_token_placeholder'),
             },
             field: {
-                name:        'Filmix token',
-                description: 'Required for search. You can obtain it via the Filmix app/site.',
+                name:        L('filmix_token_name'),
+                description: L('filmix_token_desc'),
             },
             onChange: function (value) {
                 Lampa.Storage.set('filmix_token', (value || '').trim());
                 Lampa.Noty.show((value || '').trim()
-                    ? 'Filmix: token saved'
-                    : 'Filmix: token cleared');
+                    ? L('filmix_noty_token_saved')
+                    : L('filmix_noty_token_cleared'));
             },
         });
 
@@ -960,8 +1037,8 @@
                 'default': true,
             },
             field: {
-                name:        'TMDB cards',
-                description: 'Enrich the opened card with TMDB data (poster, backdrop, overview, rating, imdb_id for online plugins).',
+                name:        L('filmix_tmdb_cards_name'),
+                description: L('filmix_tmdb_cards_desc'),
             },
         });
 
@@ -974,8 +1051,8 @@
                 'default': true,
             },
             field: {
-                name:        'Open card in TMDB',
-                description: 'List comes from Filmix, the card opens as a native TMDB card (reviews, seasons and episodes, recommendations). If there is no TMDB match — the Filmix card is shown.',
+                name:        L('filmix_redirect_name'),
+                description: L('filmix_redirect_desc'),
             },
         });
 
@@ -984,8 +1061,8 @@
             component: SETTINGS_COMPONENT,
             param:     { type: 'button' },
             field: {
-                name:        'Link Filmix account',
-                description: 'Obtain a token automatically. A code will appear — enter it on filmix.me under "Devices".',
+                name:        L('filmix_link_name'),
+                description: L('filmix_link_desc'),
             },
             onChange:  startDeviceActivation,
         });
@@ -994,17 +1071,17 @@
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
             param:     { type: 'button' },
-            field:     { name: 'Check token' },
+            field:     { name: L('filmix_check_name') },
             onChange:  function () {
-                if (!token()) { Lampa.Noty.show('Filmix: token is not set'); return; }
-                Lampa.Noty.show('Filmix: checking the token…');
+                if (!token()) { Lampa.Noty.show(L('filmix_noty_token_not_set')); return; }
+                Lampa.Noty.show(L('filmix_noty_checking'));
                 get(searchUrl('matrix'),
                     function (data) {
                         Lampa.Noty.show(Array.isArray(data) && data.length
-                            ? 'Filmix: token works ✓'
-                            : 'Filmix: token accepted, but search is empty');
+                            ? L('filmix_noty_token_works')
+                            : L('filmix_noty_token_empty'));
                     },
-                    function () { Lampa.Noty.show('Filmix: token is invalid ✗'); }
+                    function () { Lampa.Noty.show(L('filmix_noty_token_invalid')); }
                 );
             },
         });
@@ -1016,6 +1093,8 @@
     function init() {
         if (window.filmix_plugin_loaded) return;
         window.filmix_plugin_loaded = true;
+
+        registerLang();
 
         Lampa.Api.sources[SOURCE_NAME] = Source;
         Object.defineProperty(Lampa.Api.sources, SOURCE_NAME, {
