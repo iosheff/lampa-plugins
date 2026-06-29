@@ -115,6 +115,12 @@
         return v === undefined ? true : !!v;
     }
 
+    // Режим редиректа: при клике открывать родную карточку TMDB (по умолч. вкл)
+    function tmdbRedirect() {
+        var v = Lampa.Storage.field('filmix_tmdb_redirect');
+        return v === undefined ? true : !!v;
+    }
+
     function tmdbKey() {
         try { return (Lampa.TMDB && Lampa.TMDB.key) ? Lampa.TMDB.key() : ''; }
         catch (e) { return ''; }
@@ -258,6 +264,30 @@
                 if (m2) fetchDetail(m2); else done(null);
             }, function () { done(null); });
         }, function () { done(null); });
+    }
+
+    // Лёгкий поиск TMDB id по названию+году (для режима редиректа).
+    // done(id|null). serial → ищем в tv, иначе в movie.
+    function tmdbFindId(title, year, serial, done) {
+        if (!tmdbEnabled()) { done(null); return; }
+        var key = tmdbKey();
+        if (!title || !key || !Lampa.TMDB || !Lampa.TMDB.api) { done(null); return; }
+
+        var type   = serial ? 'tv' : 'movie';
+        var yparam = serial ? 'first_air_date_year' : 'primary_release_year';
+        var base   = 'search/' + type + '?api_key=' + key + '&language=ru&query=' + encodeURIComponent(title);
+
+        function pick(data) {
+            var m = pickTmdbMatch(data && data.results, title, year, serial);
+            return m ? m.id : null;
+        }
+        tmdbGet(base + (year ? ('&' + yparam + '=' + year) : ''), function (data) {
+            var id = pick(data);
+            if (id) { done(id); return; }
+            if (!year) { done(null); return; }
+            tmdbGet(base, function (d2) { done(pick(d2)); }, function () { done(null); },
+                function (d) { return d && d.results; });
+        }, function () { done(null); }, function (d) { return d && d.results; });
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -583,6 +613,8 @@
                 }, card, serial);
             }
 
+            // Загрузка карточки из Filmix (наш рендер) — фолбэк, если нет совпадения TMDB
+            function loadFilmix() {
             get(postUrl(id),
                 function (data) {
                     if (!data || !data.id) { fallback(); return; }
@@ -653,6 +685,38 @@
                 },
                 fallback
             );
+            }
+
+            // Режим редиректа: открыть РОДНУЮ карточку TMDB (отзывы, сезоны/серии,
+            // всё нативно). Список — из Filmix, карточка — из TMDB.
+            // Если совпадения нет — показываем нашу карточку Filmix.
+            if (tmdbEnabled() && tmdbRedirect()) {
+                var rc      = params.card || {};
+                var rserial = !!(rc.original_name || rc.name) || params.method === 'tv';
+                var rtitle  = rserial
+                    ? (rc.original_name || rc.name || rc.original_title || rc.title)
+                    : (rc.original_title || rc.title || rc.name);
+                var ryear   = ((rserial ? rc.first_air_date : rc.release_date) || '').slice(0, 4);
+
+                if (rtitle) {
+                    tmdbFindId(rtitle, ryear, rserial, function (tmdbId) {
+                        if (tmdbId) {
+                            Lampa.Activity.replace({
+                                component: 'full',
+                                source:    'tmdb',
+                                id:        tmdbId,
+                                method:    rserial ? 'tv' : 'movie',
+                                card:      { id: tmdbId, source: 'tmdb' },
+                            });
+                        } else {
+                            loadFilmix();   // нет совпадения TMDB — наша карточка
+                        }
+                    });
+                    return;
+                }
+            }
+
+            loadFilmix();
         },
 
         // ── Сезоны: (tv, from, oncomplite) → {[n]:{episodes, seasons_count}} ──
@@ -880,6 +944,20 @@
             field: {
                 name:        'Карточки TMDB',
                 description: 'Дополнять открытую карточку данными TMDB (постер, фон, описание, рейтинг, imdb_id для онлайн-плагинов).',
+            },
+        });
+
+        // Переключатель режима редиректа на родную карточку TMDB
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: {
+                name:      'filmix_tmdb_redirect',
+                type:      'trigger',
+                'default': true,
+            },
+            field: {
+                name:        'Открывать карточку в TMDB',
+                description: 'Список из Filmix, а карточка открывается как родная TMDB (отзывы, сезоны и серии, рекомендации). Если совпадения в TMDB нет — показывается карточка Filmix.',
             },
         });
 
