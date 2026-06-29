@@ -83,13 +83,24 @@
     }
 
     function searchUrl(query) {
-        return API_URL + 'search?' + authParams() + '&s=' + encodeURIComponent(query);
+        // параметр поиска — story= (s= молча возвращает []); требует токен
+        return API_URL + 'search?' + authParams() + '&story=' + encodeURIComponent(query);
     }
 
     function postUrl(id)   { return API_URL + 'post/'   + id + '?' + authParams(); }
     function personUrl(id) { return API_URL + 'person/' + id + '?' + authParams(); }
-    function tokenRequestUrl()      { return API_URL + 'token_request?'        + authParams(); }
-    function tokenRequestCheckUrl(code) { return API_URL + 'token_request/check?code=' + encodeURIComponent(code) + '&' + authParams(); }
+    function tokenRequestUrl() { return API_URL + 'token_request?' + authParams(); }
+    // Проверка авторизации устройства: user_profile с кандидатом-токеном (code).
+    // Пока устройство не подтверждено на сайте — отдаёт {}. После — {user_data:{...}}.
+    function userProfileUrl(candidateToken) {
+        return API_URL + 'user_profile?app_lang=ru_RU' +
+            '&user_dev_apk=2.1.2' +
+            '&user_dev_id='   + DEVICE_ID +
+            '&user_dev_name=Xiaomi' +
+            '&user_dev_os=11' +
+            '&user_dev_vendor=Xiaomi' +
+            '&user_dev_token=' + candidateToken;
+    }
 
     // ─────────────────────────────────────────────────────────────
     // Нормализация карточки: Filmix API → Lampa card
@@ -565,15 +576,17 @@
                     Lampa.Noty.show('Filmix: не удалось получить код. Попробуйте позже.');
                     return;
                 }
-                var code     = data.code;
-                var userCode = data.user_code || '';
+                // Длинный code — это и есть кандидат-токен. Он станет рабочим,
+                // как только пользователь подтвердит устройство на сайте Filmix.
+                var candidateToken = data.code;
+                var userCode       = data.user_code || '';
 
                 // Показываем диалог, который остаётся на экране до получения токена
                 Lampa.Select.show({
                     title: 'Привязка Filmix — код: ' + userCode,
                     items: [
                         { title: 'Ваш код: ' + userCode },
-                        { title: 'Откройте filmix.me → «Устройства» и введите этот код' },
+                        { title: 'Откройте filmix.me → «Профиль» → «Устройства» и введите этот код' },
                         { title: 'Закрыть', cancel: true },
                     ],
                     onSelect: function () { stopActivation(); Lampa.Controller.toggle('settings_component'); },
@@ -581,7 +594,7 @@
                 });
 
                 var attempts = 0;
-                var MAX = 60; // 5 мин максимум
+                var MAX = 60; // ~5 мин (60 × 5 сек)
                 _activationTimer = setInterval(function () {
                     attempts++;
                     if (attempts > MAX) {
@@ -589,15 +602,15 @@
                         Lampa.Noty.show('Filmix: время ожидания истекло. Повторите привязку.');
                         return;
                     }
-                    fetch(tokenRequestCheckUrl(code))
+                    // Опрашиваем user_profile с кандидатом-токеном.
+                    // Появилось user_data → устройство подтверждено, токен рабочий.
+                    fetch(userProfileUrl(candidateToken))
                         .then(function (r) { return r.json(); })
                         .then(function (resp) {
-                            var newToken = resp && (resp.user_dev_token || resp.token);
-                            if (newToken) {
+                            if (resp && resp.user_data) {
                                 stopActivation();
-                                Lampa.Storage.set('filmix_token', newToken);
-                                // Закрываем диалог и показываем успех
-                                Lampa.Controller.toggle('settings_component');
+                                Lampa.Storage.set('filmix_token', candidateToken);
+                                if (Lampa.Controller) Lampa.Controller.toggle('settings_component');
                                 Lampa.Noty.show('Filmix: аккаунт привязан! Токен сохранён ✓');
                             }
                         })
