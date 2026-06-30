@@ -1612,6 +1612,11 @@
         if (window.filmix_plugin_loaded) return;
         window.filmix_plugin_loaded = true;
 
+        // Keep TMDB redirect enabled by default for fresh installs/profiles.
+        if (Lampa.Storage.field('filmix_tmdb_redirect') === undefined) {
+            Lampa.Storage.set('filmix_tmdb_redirect', true);
+        }
+
         registerLang();
         loadMetaCache();
         startCommentsButtonWatcher();
