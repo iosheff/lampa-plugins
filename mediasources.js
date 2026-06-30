@@ -42,6 +42,8 @@
         filmix_episode:       { en: 'Episode',  ru: 'Серия' },
         filmix_trailer:       { en: 'Trailer',  ru: 'Трейлер' },
         filmix_filmography:   { en: 'Filmography', ru: 'Фильмография' },
+        filmix_comments_button:{ en: 'Comments', ru: 'Комментарии' },
+        filmix_comments_title: { en: 'Comments', ru: 'Комментарии' },
 
         // Settings
         filmix_token_name:        { en: 'Filmix token', ru: 'Токен Filmix' },
@@ -86,6 +88,9 @@
         filmix_noty_timeout:      { en: 'Filmix: timed out. Please retry the linking.', ru: 'Filmix: время ожидания истекло. Повторите привязку.' },
         filmix_noty_linked:       { en: 'Filmix: account linked! Token saved ✓', ru: 'Filmix: аккаунт привязан! Токен сохранён ✓' },
         filmix_noty_net_error:    { en: 'Filmix: network error. Check your connection.', ru: 'Filmix: ошибка сети. Проверьте подключение.' },
+        filmix_noty_comments_loading: { en: 'Filmix: loading comments…', ru: 'Filmix: загружаю комментарии…' },
+        filmix_noty_comments_empty:   { en: 'Filmix: no comments yet', ru: 'Filmix: комментариев пока нет' },
+        filmix_noty_comments_error:   { en: 'Filmix: failed to load comments', ru: 'Filmix: не удалось загрузить комментарии' },
 
         // Device-linking dialog
         filmix_link_dialog_title: { en: 'Filmix linking — code:', ru: 'Привязка Filmix — код:' },
@@ -186,6 +191,7 @@
     }
 
     function postUrl(id)   { return API_URL + 'post/'   + id + '?' + authParams(); }
+    function commentsUrl(id) { return API_URL + 'comments/' + id + '?' + authParams(); }
     function personUrl(id) { return API_URL + 'person/' + id + '?' + authParams(); }
     function tokenRequestUrl() { return API_URL + 'token_request?' + authParams(); }
     // Device authorization check: user_profile with the candidate token (code).
@@ -758,6 +764,114 @@
         if (cat === 's0')  return 'movie';
         if (cat === 's93') return 'anime';
         return 'tv';   // s7, s14
+    }
+
+    function extractComments(data) {
+        var out = [];
+
+        function pushOne(item) {
+            if (!item || typeof item !== 'object') return;
+            var text = item.comment || item.text || item.message || item.body || item.content || '';
+            if (!text) return;
+            var user = item.user || item.author || item.login || item.name || item.username || '';
+            if (user && typeof user === 'object') {
+                user = user.name || user.login || user.username || '';
+            }
+            var date = item.date || item.created_at || item.created || item.time || '';
+            out.push({
+                user: String(user || ''),
+                date: String(date || ''),
+                text: String(text || '').replace(/\s+/g, ' ').trim(),
+            });
+        }
+
+        function walk(node) {
+            if (!node) return;
+            if (Array.isArray(node)) {
+                node.forEach(walk);
+                return;
+            }
+            if (typeof node !== 'object') return;
+
+            pushOne(node);
+            Object.keys(node).forEach(function (k) {
+                var v = node[k];
+                if (Array.isArray(v) || (v && typeof v === 'object')) walk(v);
+            });
+        }
+
+        walk(data);
+        return out;
+    }
+
+    function showFilmixCommentsPopup(filmixId, title) {
+        if (!filmixId) return;
+        Lampa.Noty.show(L('filmix_noty_comments_loading'));
+
+        get(commentsUrl(filmixId), function (data) {
+            var comments = extractComments(data).slice(0, 40);
+            if (!comments.length) {
+                Lampa.Noty.show(L('filmix_noty_comments_empty'));
+                return;
+            }
+
+            var items = comments.map(function (c) {
+                var head = c.user || 'Filmix';
+                if (c.date) head += ' [' + c.date + ']';
+                var txt = c.text.length > 260 ? (c.text.slice(0, 257) + '...') : c.text;
+                return { title: head + '\n' + txt };
+            });
+            items.push({ title: L('filmix_close'), cancel: true });
+
+            Lampa.Select.show({
+                title: L('filmix_comments_title') + (title ? ': ' + title : ''),
+                items: items,
+                onBack: function () { if (Lampa.Controller) Lampa.Controller.toggle('content'); },
+            });
+        }, function () {
+            Lampa.Noty.show(L('filmix_noty_comments_error'));
+        });
+    }
+
+    function tryInjectCommentsButton() {
+        var act = (Lampa.Activity && Lampa.Activity.active) ? Lampa.Activity.active() : null;
+        if (!act || act.component !== 'full') return;
+
+        var card = act.card || {};
+        var source = card.source || act.source || '';
+        var filmixId = card.filmix_id || (source === SOURCE_NAME ? card.id : null);
+        if (!filmixId) return;
+
+        var bar = document.querySelector('.full-start-new__buttons');
+        if (!bar || bar.querySelector('.button--filmix-comments')) return;
+
+        var sample = bar.querySelector('.button--rating') || bar.querySelector('.full-start__button');
+        var btn = sample ? sample.cloneNode(true) : document.createElement('div');
+        btn.className = 'full-start__button selector button--filmix-comments';
+
+        var txt = btn.querySelector('.full-start__text');
+        if (!txt) {
+            txt = document.createElement('div');
+            txt.className = 'full-start__text';
+            btn.appendChild(txt);
+        }
+        txt.textContent = L('filmix_comments_button');
+
+        btn.addEventListener('click', function (e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            showFilmixCommentsPopup(filmixId, card.title || card.name || '');
+        });
+
+        bar.appendChild(btn);
+    }
+
+    function startCommentsButtonWatcher() {
+        if (window.filmix_comments_watcher_started) return;
+        window.filmix_comments_watcher_started = true;
+        setInterval(tryInjectCommentsButton, 700);
     }
 
     // The home title is built by a custom-home plugin as "Главная - filmix"
@@ -1487,6 +1601,7 @@
 
         registerLang();
         loadMetaCache();
+        startCommentsButtonWatcher();
 
         Lampa.Api.sources[SOURCE_NAME] = Source;
         Object.defineProperty(Lampa.Api.sources, SOURCE_NAME, {
