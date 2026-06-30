@@ -32,7 +32,7 @@
         filmix_lane_new:      { en: 'New',      ru: 'Новые' },
         filmix_lane_top:      { en: 'Top',      ru: 'Топ' },
         filmix_lane_latest:   { en: 'Latest',   ru: 'Последние' },
-        filmix_lane_new_episodes: { en: 'New episodes', ru: 'Новые серии' },
+        filmix_lane_new_episodes: { en: 'New series episodes', ru: 'Новые эпизоды сериалов' },
         filmix_lane_continue:     { en: 'Continue watching', ru: 'Продолжить просмотр' },
         filmix_coll_foreign:      { en: 'Foreign', ru: 'Зарубежные' },
         filmix_coll_russian:      { en: 'Russian', ru: 'Русские' },
@@ -704,6 +704,22 @@
         return 'tv';   // s7, s14
     }
 
+    // The home title is built by a custom-home plugin as "Главная - filmix"
+    // (lowercase source key), unlike core sections which uppercase it. Normalize
+    // the visible header (and activity title) to the uppercase source name.
+    function fixHomeTitle() {
+        try {
+            var up = SOURCE_TITLE.toUpperCase();              // FILMIX
+            var re = new RegExp('\\b' + SOURCE_NAME + '\\b', 'ig');
+            var act = Lampa.Activity.active && Lampa.Activity.active();
+            if (act && typeof act.title === 'string') act.title = act.title.replace(re, up);
+            var el = document.querySelector('.head__title');
+            if (el && new RegExp('\\b' + SOURCE_NAME + '\\b', 'i').test(el.textContent)) {
+                el.textContent = el.textContent.replace(re, up);
+            }
+        } catch (e) {}
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Source object
     // Lampa contract: methods receive (params, oncomplite, onerror)
@@ -714,10 +730,13 @@
 
         // ── Home screen: array of rows [{title, results:[...]}] ──
         main: function (params, oncomplite, onerror) {
+            fixHomeTitle();
+            setTimeout(fixHomeTitle, 0);   // also after the header finishes rendering
+
             var nw = L('filmix_lane_new'), tp = L('filmix_lane_top');
             var rows = [
                 { title: nw + ' ' + catTitle('s0').toLowerCase(), cat: 's0',  sort: 'date',   genres: 's0'  },
-                { title: nw + ' ' + catTitle('s7').toLowerCase(), cat: 's7',  sort: 'date',   genres: 's7'  },
+                { title: L('filmix_lane_new_episodes'),           cat: 's7',  sort: 'date',   genres: 's7'  },
                 { title: tp + ' ' + catTitle('s0').toLowerCase(), cat: 's0',  sort: 'rating', genres: 's0'  },
                 { title: tp + ' ' + catTitle('s7').toLowerCase(), cat: 's7',  sort: 'rating', genres: 's7'  },
                 { title: catTitle('s14'),                         cat: 's14', sort: 'date',   genres: 's14' },
