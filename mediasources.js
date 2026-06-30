@@ -833,6 +833,15 @@
         });
     }
 
+    function getQueryParam(name) {
+        try {
+            var m = new RegExp('(?:[?&])' + name + '=([^&]+)').exec(window.location.search || '');
+            return m ? decodeURIComponent(m[1]) : '';
+        } catch (e) {
+            return '';
+        }
+    }
+
     function tryInjectCommentsButton() {
         var act = (Lampa.Activity && Lampa.Activity.active) ? Lampa.Activity.active() : null;
         if (!act || act.component !== 'full') return;
@@ -840,6 +849,11 @@
         var card = act.card || {};
         var source = card.source || act.source || '';
         var filmixId = card.filmix_id || (source === SOURCE_NAME ? card.id : null);
+        if (!filmixId) {
+            var urlSource = getQueryParam('source');
+            var urlCard = getQueryParam('card');
+            if (urlSource === SOURCE_NAME && /^\d+$/.test(urlCard || '')) filmixId = parseInt(urlCard, 10);
+        }
         if (!filmixId) return;
 
         var bar = document.querySelector('.full-start-new__buttons');
