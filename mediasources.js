@@ -505,8 +505,10 @@
         if (!tmdbEnabled() || !cards || !cards.length) { done(); return; }
         var tasks = cards.map(function (card) {
             return function (finish) {
-                var serial = !!card.original_name;
-                var title  = serial ? (card.original_name || card.name) : (card.original_title || card.title);
+                var serial = isCardSerial(card);
+                var title  = serial
+                    ? (card.filmix_original_name || card.original_name || card.name)
+                    : (card.original_title || card.title);
                 var year   = ((serial ? card.first_air_date : card.release_date) || '').slice(0, 4);
                 tmdbFindMeta(title, year, serial, function (meta) {
                     if (meta) {
@@ -588,8 +590,12 @@
 
         // method is computed by Lampa as original_name ? 'tv' : 'movie'
         if (serial) {
+            card.filmix_is_serial   = true;
+            card.filmix_original_name = t_orig || t_title;
             card.name           = t_title || t_orig;
-            card.original_name  = t_orig  || t_title;
+            // Lampa does not render quality marks for cards with original_name,
+            // so keep the value in filmix_original_name and leave original_name empty.
+            card.original_name  = '';
             // also set title: the full card renderer reads card.title.length
             // without a guard (does not affect tv/movie — that is by original_name)
             card.title          = t_title || t_orig;
@@ -717,6 +723,10 @@
                     && !thrown.some(function (t) { return t.id == e.id; });
             }).slice(0, 19);
         } catch (e) { return []; }
+    }
+
+    function isCardSerial(card) {
+        return !!(card && (card.filmix_is_serial || card.original_name));
     }
 
     // Maps a Filmix catalog section to the Favorite.continues() type.
@@ -947,7 +957,7 @@
             function fallback() {
                 var card = params.card;
                 if (!card) { (onerror || function () {})(); return; }
-                var serial = !!(card.original_name || card.name) || params.method === 'tv';
+                var serial = isCardSerial(card) || !!card.name || params.method === 'tv';
                 // Ensure fields the full card renderer reads without a guard
                 if (!card.production_companies) card.production_companies = [];
                 if (!card.production_countries) card.production_countries = [];
@@ -1040,7 +1050,7 @@
             // If there is no match — show our Filmix card.
             if (tmdbEnabled() && tmdbRedirect()) {
                 var rc      = params.card || {};
-                var rserial = !!(rc.original_name || rc.name) || params.method === 'tv';
+                var rserial = isCardSerial(rc) || !!rc.name || params.method === 'tv';
 
                 function redirectTo(tmdbId) {
                     // Defer: Activity.replace must run AFTER full()/onCreate returns,
@@ -1060,7 +1070,7 @@
                 if (rc.tmdb_id) { redirectTo(rc.tmdb_id); return; }
 
                 var rtitle  = rserial
-                    ? (rc.original_name || rc.name || rc.original_title || rc.title)
+                    ? (rc.filmix_original_name || rc.original_name || rc.name || rc.original_title || rc.title)
                     : (rc.original_title || rc.title || rc.name);
                 var ryear   = ((rserial ? rc.first_air_date : rc.release_date) || '').slice(0, 4);
 
