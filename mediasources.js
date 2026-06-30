@@ -54,6 +54,9 @@
         filmix_quality_label_name:{ en: 'Quality label', ru: 'Лейбл качества' },
         filmix_quality_label_desc:{ en: 'Show quality labels on cards in lanes and lists.',
                         ru: 'Показывать лейбл качества на карточках в лентах и списках.' },
+        filmix_now_lanes_name:    { en: 'Now watching lanes', ru: 'Ленты Сейчас смотрят' },
+        filmix_now_lanes_desc:    { en: 'Show "Now watching" lanes on home and category pages.',
+                        ru: 'Показывать ленты «Сейчас смотрят» на главной и в разделах.' },
         filmix_redirect_name:     { en: 'Open card in TMDB', ru: 'Открывать карточку в TMDB' },
         filmix_redirect_desc:     { en: 'List comes from Filmix, the card opens as a native TMDB card (reviews, seasons and episodes, recommendations). If there is no TMDB match — the Filmix card is shown.',
                                     ru: 'Список из Filmix, а карточка открывается как родная TMDB (отзывы, сезоны и серии, рекомендации). Если совпадения в TMDB нет — показывается карточка Filmix.' },
@@ -237,6 +240,11 @@
     // Show "Russian" collection lanes (enabled by default)
     function russianEnabled() {
         return settingEnabled('filmix_russian', true);
+    }
+
+    // Show "Now watching" lanes on home/category pages (enabled by default)
+    function nowWatchingEnabled() {
+        return settingEnabled('filmix_now_lanes', true);
     }
 
     function tmdbKey() {
@@ -777,8 +785,6 @@
 
             var nw = L('filmix_lane_new'), tp = L('filmix_lane_top');
             var rows = [
-                { title: L('filmix_lane_now_movies'), section: 999, mode: 'popular' },
-                { title: L('filmix_lane_now_series'), section: 7,   mode: 'popular' },
                 { title: nw + ' ' + catTitle('s0').toLowerCase(), cat: 's0',  sort: 'date',   genres: 's0'  },
                 { title: L('filmix_lane_new_episodes'),           cat: 's7',  sort: 'date',   genres: 's7'  },
                 { title: tp + ' ' + catTitle('s0').toLowerCase(), cat: 's0',  sort: 'rating', genres: 's0'  },
@@ -786,6 +792,14 @@
                 { title: catTitle('s14'),                         cat: 's14', sort: 'date',   genres: 's14' },
                 { title: catTitle('s93'),                         cat: 's93', sort: 'date',   genres: 's93' },
             ];
+
+            // Place "Now watching" lanes under "New series episodes".
+            if (nowWatchingEnabled()) {
+                rows.splice(2, 0,
+                    { title: L('filmix_lane_now_movies'), section: 999, mode: 'popular' },
+                    { title: L('filmix_lane_now_series'), section: 7,   mode: 'popular' }
+                );
+            }
 
             var results = new Array(rows.length);
             var done = 0;
@@ -862,17 +876,23 @@
             if (cat === 's7') {
                 // Series: "New episodes" (recent updates) + "New series" (newest titles) + "Top"
                 lanes = [
-                    { title: L('filmix_lane_now_series'), section: 7, mode: 'popular' },
                     { title: L('filmix_lane_new_episodes'),                    sort: 'date'   },
                     { title: L('filmix_lane_new') + ' ' + name.toLowerCase(),  sort: 'year'   },
                     { title: L('filmix_lane_top') + ' ' + name.toLowerCase(),  sort: 'rating' },
                 ];
+                // Place "Now watching" under "New series".
+                if (nowWatchingEnabled()) {
+                    lanes.splice(2, 0, { title: L('filmix_lane_now_series'), section: 7, mode: 'popular' });
+                }
             } else {
                 lanes = [
-                    { title: L('filmix_lane_now_movies'), section: 999, mode: 'popular' },
                     { title: L('filmix_lane_latest') + ' ' + name.toLowerCase(), sort: 'date'   },
                     { title: L('filmix_lane_top') + ' ' + name.toLowerCase(),    sort: 'rating' },
                 ];
+                // Place "Now watching" under "Latest".
+                if (nowWatchingEnabled()) {
+                    lanes.splice(1, 0, { title: L('filmix_lane_now_movies'), section: 999, mode: 'popular' });
+                }
             }
 
             // Collections "Foreign"/"Russian" (films & series only) via filter=<section>-c996/-c6
@@ -1362,6 +1382,20 @@
             field: {
                 name:        L('filmix_quality_label_name'),
                 description: L('filmix_quality_label_desc'),
+            },
+        });
+
+        // "Now watching" lanes toggle
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: {
+                name:      'filmix_now_lanes',
+                type:      'trigger',
+                'default': true,
+            },
+            field: {
+                name:        L('filmix_now_lanes_name'),
+                description: L('filmix_now_lanes_desc'),
             },
         });
 
