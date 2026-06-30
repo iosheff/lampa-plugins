@@ -49,6 +49,9 @@
         filmix_tmdb_cards_name:   { en: 'TMDB cards', ru: 'Карточки TMDB' },
         filmix_tmdb_cards_desc:   { en: 'Enrich the opened card with TMDB data (poster, backdrop, overview, rating, imdb_id for online plugins).',
                                     ru: 'Дополнять открытую карточку данными TMDB (постер, фон, описание, рейтинг, imdb_id для онлайн-плагинов).' },
+        filmix_quality_label_name:{ en: 'Quality label', ru: 'Лейбл качества' },
+        filmix_quality_label_desc:{ en: 'Show quality labels on cards in lanes and lists.',
+                        ru: 'Показывать лейбл качества на карточках в лентах и списках.' },
         filmix_redirect_name:     { en: 'Open card in TMDB', ru: 'Открывать карточку в TMDB' },
         filmix_redirect_desc:     { en: 'List comes from Filmix, the card opens as a native TMDB card (reviews, seasons and episodes, recommendations). If there is no TMDB match — the Filmix card is shown.',
                                     ru: 'Список из Filmix, а карточка открывается как родная TMDB (отзывы, сезоны и серии, рекомендации). Если совпадения в TMDB нет — показывается карточка Filmix.' },
@@ -195,6 +198,12 @@
     function tmdbEnabled() {
         // enabled by default
         var v = Lampa.Storage.field('filmix_tmdb_cards');
+        return v === undefined ? true : !!v;
+    }
+
+    // Show quality label on cards in lanes/lists (enabled by default)
+    function qualityLabelEnabled() {
+        var v = Lampa.Storage.field('filmix_quality_label');
         return v === undefined ? true : !!v;
     }
 
@@ -562,7 +571,7 @@
             vote_count:   parseInt(item.kp_votes, 10) || 0,
             kp_rating:    parseFloat(item.kp_rating)   || 0,
             imdb_rating:  parseFloat(item.imdb_rating) || 0,
-            quality:      item.quality || item.rip || '',
+            quality:      qualityLabelEnabled() ? (item.quality || item.rip || '') : '',
 
             // poster: full URL — store in poster/img (not poster_path)
             poster: poster,
@@ -1287,6 +1296,20 @@
             field: {
                 name:        L('filmix_tmdb_cards_name'),
                 description: L('filmix_tmdb_cards_desc'),
+            },
+        });
+
+        // Quality label on lane/list cards toggle
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: {
+                name:      'filmix_quality_label',
+                type:      'trigger',
+                'default': true,
+            },
+            field: {
+                name:        L('filmix_quality_label_name'),
+                description: L('filmix_quality_label_desc'),
             },
         });
 
