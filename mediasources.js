@@ -849,13 +849,12 @@
         var btn = sample ? sample.cloneNode(true) : document.createElement('div');
         btn.className = 'full-start__button selector button--filmix-comments';
 
-        var txt = btn.querySelector('.full-start__text');
-        if (!txt) {
-            txt = document.createElement('div');
-            txt.className = 'full-start__text';
-            btn.appendChild(txt);
-        }
+        // Reset cloned content to avoid inherited labels like "RateComments".
+        btn.innerHTML = '';
+        var txt = document.createElement('div');
+        txt.className = 'full-start__text';
         txt.textContent = L('filmix_comments_button');
+        btn.appendChild(txt);
 
         btn.addEventListener('click', function (e) {
             if (e) {
