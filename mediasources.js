@@ -840,6 +840,32 @@
         }
     }
 
+    function rememberTmdbFilmix(tmdbId, filmixId) {
+        if (!tmdbId || !filmixId) return;
+        try {
+            var map = Lampa.Storage.get('filmix_tmdb_links', {}) || {};
+            map[String(tmdbId)] = String(filmixId);
+            // soft cap: keep latest 1000 mappings
+            var keys = Object.keys(map);
+            if (keys.length > 1000) {
+                var trimmed = {};
+                keys.slice(keys.length - 1000).forEach(function (k) { trimmed[k] = map[k]; });
+                map = trimmed;
+            }
+            Lampa.Storage.set('filmix_tmdb_links', map);
+        } catch (e) {}
+    }
+
+    function resolveFilmixIdForTmdb(tmdbId) {
+        if (!tmdbId) return '';
+        try {
+            var map = Lampa.Storage.get('filmix_tmdb_links', {}) || {};
+            return map[String(tmdbId)] || '';
+        } catch (e) {
+            return '';
+        }
+    }
+
     function tryInjectCommentsButton() {
         var act = (Lampa.Activity && Lampa.Activity.active) ? Lampa.Activity.active() : null;
         if (!act || act.component !== 'full') return;
@@ -849,8 +875,10 @@
         var sl = String(source).toLowerCase();
         if (sl !== 'tmdb' && sl !== SOURCE_NAME) return;
 
+        var tmdbId = card.id || getQueryParam('card') || '';
         var filmixId = card.filmix_id || getQueryParam('filmix_id') || '';
         if (!filmixId && sl === SOURCE_NAME && card.id) filmixId = card.id;
+        if (!filmixId && sl === 'tmdb') filmixId = resolveFilmixIdForTmdb(tmdbId);
         if (!filmixId) {
             var urlSource = getQueryParam('source');
             var urlCard = getQueryParam('card');
@@ -1250,6 +1278,7 @@
                     // Defer: Activity.replace must run AFTER full()/onCreate returns,
                     // otherwise it races the activity being created and hangs on a spinner.
                     setTimeout(function () {
+                        rememberTmdbFilmix(tmdbId, id);
                         Lampa.Activity.replace({
                             component: 'full',
                             source:    'tmdb',
