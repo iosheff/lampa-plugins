@@ -773,7 +773,7 @@
             if (!item || typeof item !== 'object') return;
             var text = item.comment || item.text || item.message || item.body || item.content || '';
             if (!text) return;
-            var user = item.user || item.author || item.login || item.name || item.username || '';
+            var user = item.user || item.author || item.login || item.name || item.username || item.gast_name || '';
             if (user && typeof user === 'object') {
                 user = user.name || user.login || user.username || '';
             }
