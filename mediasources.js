@@ -572,6 +572,12 @@
 
     // Filmix returns full poster URLs. Lampa.Api.img always prepends the TMDB
     // base, so we do NOT set poster_path; we put the full URL into poster/img.
+    function compactQualityLabel(value) {
+        var q = String(value || '');
+        var m = q.match(/\b(\d{3,4})\b/);
+        return m ? m[1] : '';
+    }
+
     function convertCard(item) {
         if (!item) return null;
 
@@ -595,7 +601,7 @@
             vote_count:   parseInt(item.kp_votes, 10) || 0,
             kp_rating:    parseFloat(item.kp_rating)   || 0,
             imdb_rating:  parseFloat(item.imdb_rating) || 0,
-            quality:      qualityLabelEnabled() ? (item.quality || item.rip || '') : '',
+            quality:      qualityLabelEnabled() ? compactQualityLabel(item.quality || item.rip || '') : '',
 
             // poster: full URL — store in poster/img (not poster_path)
             poster: poster,
