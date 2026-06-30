@@ -51,15 +51,18 @@ methods with **positional callbacks**, NOT `params.onComplite`:
 ### Card rules (hard-won, do not regress)
 
 - Every Filmix card MUST have `source: 'filmix'`, otherwise clicks route to TMDB.
-- Lampa computes media type as `card.original_name ? 'tv' : 'movie'`. So
-  **series** get `name`/`original_name`; **movies** get `title`/`original_title`.
+- Lampa computes media type as `card.original_name ? 'tv' : 'movie'`.
+- In this plugin we intentionally keep `original_name` empty for Filmix series
+  lane/list cards so Lampa renders the quality badge for serials (otherwise it
+  shows `TV` and hides quality).
+- To preserve series logic despite empty `original_name`, use plugin fields:
+  `filmix_is_serial` and `filmix_original_name`.
 - The full-card renderer reads several fields **without a guard** — a card
   missing them throws and the page hangs on an infinite spinner:
   - `card.production_companies.length`, `card.production_countries`, `card.genres`
     → always set these (at least `[]`).
   - `card.title.length` → **every card must have `title`**, including series
-    (set `title` in addition to `name`; it doesn't affect tv/movie detection,
-    which is by `original_name`).
+    (set `title` in addition to `name`).
 - Posters: Filmix returns full poster URLs, but `Lampa.Api.img` always prepends
   the TMDB base. So for Filmix posters set `card.poster` AND `card.img` to the
   full URL and DO NOT set `poster_path`. For TMDB-enriched cards, set
@@ -146,6 +149,9 @@ TMDB redirect do not need it.
   rating/poster/backdrop/tmdb_id via `tmdbFindMeta` (one TMDB search per title,
   concurrency 8). Filmix gives no ratings, so first load of a screen is slow
   (~150 searches); cached after. Gated by the `filmix_tmdb_cards` toggle.
+- For Filmix serial cards, TMDB title lookup should use `filmix_original_name`
+  (fallback: `original_name`/`name`) because `original_name` may be intentionally
+  empty for quality-badge rendering.
 - **Persistent cache** `_tmdbMeta` (key `tv:|mv: + title|year` → `{m, ts}`) is
   saved to `Lampa.Storage('filmix_tmdb_cache')` with a **7-day TTL** (soft cap
   3000, debounced save, pruned in `loadMetaCache()` at init). Warm `category()`
@@ -173,6 +179,8 @@ TMDB redirect do not need it.
 - `filmix_token` (input) — Filmix token for search.
 - `filmix_tmdb_cards` (trigger, default on) — enrich cards with TMDB
   rating/poster/data (also drives lane enrichment + persistent cache).
+- `filmix_quality_label` (trigger, default on) — show/hide quality labels on
+  cards in lanes/lists.
 - `filmix_tmdb_redirect` (trigger, default on) — open the native TMDB card.
 - `filmix_foreign` (trigger, default on) — show "Foreign" lanes
   on the films and series pages.
@@ -180,6 +188,12 @@ TMDB redirect do not need it.
   on the films and series pages.
 - "Link Filmix account" (button) — runs the device-activation flow.
 - "Check token" (button).
+
+### Trigger value parsing
+
+- Lampa SettingsApi trigger values can be stored as strings (`"true"`,
+  `"false"`, `"1"`, `"0"`). Do NOT parse toggles with raw `!!value`.
+- Use explicit normalization for booleans when reading trigger settings.
 
 ## i18n
 

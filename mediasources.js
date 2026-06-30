@@ -44,6 +44,7 @@
         filmix_filmography:   { en: 'Filmography', ru: 'Фильмография' },
         filmix_comments_button:{ en: 'Comments', ru: 'Комментарии' },
         filmix_comments_title: { en: 'Comments', ru: 'Комментарии' },
+        filmix_comments_filmix: { en: 'Filmix comments', ru: 'Комментарии Filmix' },
 
         // Settings
         filmix_token_name:        { en: 'Filmix token', ru: 'Токен Filmix' },
@@ -91,6 +92,7 @@
         filmix_noty_comments_loading: { en: 'Filmix: loading comments…', ru: 'Filmix: загружаю комментарии…' },
         filmix_noty_comments_empty:   { en: 'Filmix: no comments yet', ru: 'Filmix: комментариев пока нет' },
         filmix_noty_comments_error:   { en: 'Filmix: failed to load comments', ru: 'Filmix: не удалось загрузить комментарии' },
+        filmix_noty_comments_missing: { en: 'Filmix: no linked item for comments', ru: 'Filmix: нет связанного объекта для комментариев' },
 
         // Device-linking dialog
         filmix_link_dialog_title: { en: 'Filmix linking — code:', ru: 'Привязка Filmix — код:' },
@@ -771,12 +773,10 @@
 
         function pushOne(item) {
             if (!item || typeof item !== 'object') return;
-            var text = item.comment || item.text || item.message || item.body || item.content || '';
+            var text = item.text || item.comment || item.message || item.body || item.content || '';
             if (!text) return;
-            var user = item.user || item.author || item.login || item.name || item.username || item.gast_name || '';
-            if (user && typeof user === 'object') {
-                user = user.name || user.login || user.username || '';
-            }
+            var user = item.gast_name || item.user || item.author || item.login || item.name || item.username || '';
+            if (user && typeof user === 'object') user = user.name || user.login || user.username || '';
             var date = item.date || item.created_at || item.created || item.time || '';
             out.push({
                 user: String(user || ''),
@@ -787,12 +787,8 @@
 
         function walk(node) {
             if (!node) return;
-            if (Array.isArray(node)) {
-                node.forEach(walk);
-                return;
-            }
+            if (Array.isArray(node)) { node.forEach(walk); return; }
             if (typeof node !== 'object') return;
-
             pushOne(node);
             Object.keys(node).forEach(function (k) {
                 var v = node[k];
@@ -805,9 +801,12 @@
     }
 
     function showFilmixCommentsPopup(filmixId, title) {
-        if (!filmixId) return;
-        Lampa.Noty.show(L('filmix_noty_comments_loading'));
+        if (!filmixId) {
+            Lampa.Noty.show(L('filmix_noty_comments_missing'));
+            return;
+        }
 
+        Lampa.Noty.show(L('filmix_noty_comments_loading'));
         get(commentsUrl(filmixId), function (data) {
             var comments = extractComments(data).slice(0, 40);
             if (!comments.length) {
@@ -824,9 +823,8 @@
             items.push({ title: L('filmix_close'), cancel: true });
 
             Lampa.Select.show({
-                title: L('filmix_comments_title') + (title ? ': ' + title : ''),
+                title: L('filmix_comments_filmix') + (title ? ': ' + title : ''),
                 items: items,
-                onBack: function () { if (Lampa.Controller) Lampa.Controller.toggle('content'); },
             });
         }, function () {
             Lampa.Noty.show(L('filmix_noty_comments_error'));
@@ -847,28 +845,34 @@
         if (!act || act.component !== 'full') return;
 
         var card = act.card || {};
-        var source = card.source || act.source || '';
-        var filmixId = card.filmix_id || (source === SOURCE_NAME ? card.id : null);
+        var source = card.source || act.source || getQueryParam('source') || '';
+        var sl = String(source).toLowerCase();
+        if (sl !== 'tmdb' && sl !== SOURCE_NAME) return;
+
+        var filmixId = card.filmix_id || getQueryParam('filmix_id') || '';
+        if (!filmixId && sl === SOURCE_NAME && card.id) filmixId = card.id;
         if (!filmixId) {
             var urlSource = getQueryParam('source');
             var urlCard = getQueryParam('card');
-            if (urlSource === SOURCE_NAME && /^\d+$/.test(urlCard || '')) filmixId = parseInt(urlCard, 10);
+            if ((urlSource === SOURCE_NAME || urlSource === 'filmix') && /^\d+$/.test(urlCard || '')) {
+                filmixId = parseInt(urlCard, 10);
+            }
         }
-        if (!filmixId) return;
 
         var bar = document.querySelector('.full-start-new__buttons');
         if (!bar || bar.querySelector('.button--filmix-comments')) return;
 
-        var sample = bar.querySelector('.button--rating') || bar.querySelector('.full-start__button');
-        var btn = sample ? sample.cloneNode(true) : document.createElement('div');
+        var btn = document.createElement('div');
         btn.className = 'full-start__button selector button--filmix-comments';
-
-        // Reset cloned content to avoid inherited labels like "RateComments".
-        btn.innerHTML = '';
-        var txt = document.createElement('div');
-        txt.className = 'full-start__text';
-        txt.textContent = L('filmix_comments_button');
-        btn.appendChild(txt);
+        btn.setAttribute('title', L('filmix_comments_filmix'));
+        btn.setAttribute('aria-label', L('filmix_comments_filmix'));
+        btn.innerHTML =
+            '<div class="full-start__icon">' +
+            '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+            '<path d="M4 5h16v10H8l-4 4V5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>' +
+            '<path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
+            '</svg>' +
+            '</div>';
 
         btn.addEventListener('click', function (e) {
             if (e) {
@@ -1251,7 +1255,7 @@
                             source:    'tmdb',
                             id:        tmdbId,
                             method:    rserial ? 'tv' : 'movie',
-                            card:      { id: tmdbId, source: 'tmdb' },
+                            card:      { id: tmdbId, source: 'tmdb', filmix_id: id },
                         });
                     }, 0);
                 }
