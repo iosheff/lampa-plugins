@@ -200,11 +200,26 @@ TMDB redirect do not need it.
 
 ## Deploy & testing notes
 
-- Deployed via GitHub Pages; **propagation is often slow (1–5 min)** after a
-  push, and Lampa caches plugin JS in the browser — a normal reload may run
-  stale code. Hard-reload (Ctrl+Shift+R) or re-add the plugin to pick up changes.
-- Live testing was done against the real Lampa instance at `bylampa.online`.
-- Lampa globals available: `Lampa.Api.sources`, `Lampa.Storage`, `Lampa.TMDB`,
-  `Lampa.Reguest`, `Lampa.Activity`, `Lampa.Select`, `Lampa.Noty`,
-  `Lampa.Controller`, `Lampa.SettingsApi`, `Lampa.Lang`, `Lampa.Utils`,
-  `Lampa.Listener`, `Lampa.Params`.
+- Deployed via **GitHub Pages** from the `main` branch.
+- Plugin URL: `https://iosheff.github.io/lampa-plugins/mediasources.js`.
+- **Workflow**: commit and push directly to `main` (no PRs needed).
+- **Propagation is often slow (1–5 min)** after a push, and Lampa caches
+  plugin JS in the browser — a normal reload may run stale code.
+  Hard-reload (Ctrl+Shift+R) or re-add the plugin to pick up changes.
+- Live testing is done against the real Lampa instance at `bylampa.online`.
+
+### Deploy steps (for AI assistants)
+
+1. Make changes to `mediasources.js`.
+2. Validate syntax: `node -c mediasources.js`.
+3. Commit: `git add -A && git commit -m "<message>"`.
+4. Push to main: `git push origin HEAD:main` (or `git push` if already on main).
+5. Wait 1–5 min for GitHub Pages propagation.
+6. Verify in Lampa (hard-reload the page).
+
+### Lampa globals available
+
+`Lampa.Api.sources`, `Lampa.Storage`, `Lampa.TMDB`, `Lampa.Reguest`,
+`Lampa.Activity`, `Lampa.Select`, `Lampa.Noty`, `Lampa.Controller`,
+`Lampa.SettingsApi`, `Lampa.Lang`, `Lampa.Utils`, `Lampa.Listener`,
+`Lampa.Params`.
