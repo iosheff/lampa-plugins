@@ -174,7 +174,9 @@ TMDB redirect do not need it.
 - `filmix_tmdb_cards` (trigger, default on) — enrich cards with TMDB
   rating/poster/data (also drives lane enrichment + persistent cache).
 - `filmix_tmdb_redirect` (trigger, default on) — open the native TMDB card.
-- `filmix_collections` (trigger, default on) — show "Foreign"/"Russian" lanes
+- `filmix_foreign` (trigger, default on) — show "Foreign" lanes
+  on the films and series pages.
+- `filmix_russian` (trigger, default on) — show "Russian" lanes
   on the films and series pages.
 - "Link Filmix account" (button) — runs the device-activation flow.
 - "Check token" (button).

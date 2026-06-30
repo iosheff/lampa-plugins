@@ -52,9 +52,12 @@
         filmix_redirect_name:     { en: 'Open card in TMDB', ru: 'Открывать карточку в TMDB' },
         filmix_redirect_desc:     { en: 'List comes from Filmix, the card opens as a native TMDB card (reviews, seasons and episodes, recommendations). If there is no TMDB match — the Filmix card is shown.',
                                     ru: 'Список из Filmix, а карточка открывается как родная TMDB (отзывы, сезоны и серии, рекомендации). Если совпадения в TMDB нет — показывается карточка Filmix.' },
-        filmix_collections_name:  { en: 'Russian / Foreign collections', ru: 'Подборки Русские / Зарубежные' },
-        filmix_collections_desc:  { en: 'Show "Foreign" and "Russian" lanes on the films and series pages.',
-                                    ru: 'Показывать ленты «Зарубежные» и «Русские» на страницах фильмов и сериалов.' },
+        filmix_foreign_name:      { en: 'Foreign collections', ru: 'Подборки Зарубежные' },
+        filmix_foreign_desc:      { en: 'Show "Foreign" lanes on the films and series pages.',
+                                    ru: 'Показывать ленты «Зарубежные» на страницах фильмов и сериалов.' },
+        filmix_russian_name:      { en: 'Russian collections', ru: 'Подборки Русские' },
+        filmix_russian_desc:      { en: 'Show "Russian" lanes on the films and series pages.',
+                                    ru: 'Показывать ленты «Русские» на страницах фильмов и сериалов.' },
         filmix_link_name:         { en: 'Link Filmix account', ru: 'Привязать аккаунт Filmix' },
         filmix_link_desc:         { en: 'Obtain a token automatically. A code will appear — enter it on filmix.me under "Devices".',
                                     ru: 'Получить токен автоматически. Откроется код — введите его на filmix.me в разделе «Устройства».' },
@@ -201,9 +204,15 @@
         return v === undefined ? true : !!v;
     }
 
-    // Show "Foreign"/"Russian" collection lanes (enabled by default)
-    function collectionsEnabled() {
-        var v = Lampa.Storage.field('filmix_collections');
+    // Show "Foreign" collection lanes (enabled by default)
+    function foreignEnabled() {
+        var v = Lampa.Storage.field('filmix_foreign');
+        return v === undefined ? true : !!v;
+    }
+
+    // Show "Russian" collection lanes (enabled by default)
+    function russianEnabled() {
+        var v = Lampa.Storage.field('filmix_russian');
         return v === undefined ? true : !!v;
     }
 
@@ -818,9 +827,13 @@
             }
 
             // Collections "Foreign"/"Russian" (films & series only) via filter=<section>-c996/-c6
-            if ((cat === 's0' || cat === 's7') && collectionsEnabled()) {
-                lanes.push({ title: L('filmix_coll_foreign') + ' ' + name.toLowerCase(), sort: 'date', cat: cat + '-c996' });
-                lanes.push({ title: L('filmix_coll_russian') + ' ' + name.toLowerCase(), sort: 'date', cat: cat + '-c6'   });
+            if (cat === 's0' || cat === 's7') {
+                if (foreignEnabled()) {
+                    lanes.push({ title: L('filmix_coll_foreign') + ' ' + name.toLowerCase(), sort: 'date', cat: cat + '-c996' });
+                }
+                if (russianEnabled()) {
+                    lanes.push({ title: L('filmix_coll_russian') + ' ' + name.toLowerCase(), sort: 'date', cat: cat + '-c6'   });
+                }
             }
 
             // Initial load: all lanes in parallel
@@ -1291,17 +1304,31 @@
             },
         });
 
-        // "Foreign"/"Russian" collections toggle
+        // "Foreign" collections toggle
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
             param: {
-                name:      'filmix_collections',
+                name:      'filmix_foreign',
                 type:      'trigger',
                 'default': true,
             },
             field: {
-                name:        L('filmix_collections_name'),
-                description: L('filmix_collections_desc'),
+                name:        L('filmix_foreign_name'),
+                description: L('filmix_foreign_desc'),
+            },
+        });
+
+        // "Russian" collections toggle
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: {
+                name:      'filmix_russian',
+                type:      'trigger',
+                'default': true,
+            },
+            field: {
+                name:        L('filmix_russian_name'),
+                description: L('filmix_russian_desc'),
             },
         });
 
