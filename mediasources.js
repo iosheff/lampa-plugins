@@ -196,33 +196,38 @@
     // falling back to api.themoviedb.org directly.
     // ─────────────────────────────────────────────────────────────
     function tmdbEnabled() {
-        // enabled by default
-        var v = Lampa.Storage.field('filmix_tmdb_cards');
-        return v === undefined ? true : !!v;
+        return settingEnabled('filmix_tmdb_cards', true);
+    }
+
+    function settingEnabled(name, def) {
+        var v = Lampa.Storage.field(name);
+        if (v === undefined || v === null || v === '') return !!def;
+        if (typeof v === 'string') {
+            var s = v.toLowerCase();
+            if (s === 'false' || s === '0' || s === 'off' || s === 'no') return false;
+            if (s === 'true' || s === '1' || s === 'on' || s === 'yes') return true;
+        }
+        return !!v;
     }
 
     // Show quality label on cards in lanes/lists (enabled by default)
     function qualityLabelEnabled() {
-        var v = Lampa.Storage.field('filmix_quality_label');
-        return v === undefined ? true : !!v;
+        return settingEnabled('filmix_quality_label', true);
     }
 
     // Redirect mode: open the native TMDB card on click (enabled by default)
     function tmdbRedirect() {
-        var v = Lampa.Storage.field('filmix_tmdb_redirect');
-        return v === undefined ? true : !!v;
+        return settingEnabled('filmix_tmdb_redirect', true);
     }
 
     // Show "Foreign" collection lanes (enabled by default)
     function foreignEnabled() {
-        var v = Lampa.Storage.field('filmix_foreign');
-        return v === undefined ? true : !!v;
+        return settingEnabled('filmix_foreign', true);
     }
 
     // Show "Russian" collection lanes (enabled by default)
     function russianEnabled() {
-        var v = Lampa.Storage.field('filmix_russian');
-        return v === undefined ? true : !!v;
+        return settingEnabled('filmix_russian', true);
     }
 
     function tmdbKey() {
