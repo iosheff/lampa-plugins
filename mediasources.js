@@ -34,6 +34,8 @@
         filmix_lane_latest:   { en: 'Latest',   ru: 'Последние' },
         filmix_lane_new_episodes: { en: 'New series episodes', ru: 'Новые эпизоды сериалов' },
         filmix_lane_continue:     { en: 'Continue watching', ru: 'Продолжить просмотр' },
+        filmix_lane_now_movies:   { en: 'Now watching movies', ru: 'Сейчас смотрят фильмы' },
+        filmix_lane_now_series:   { en: 'Now watching series', ru: 'Сейчас смотрят сериалы' },
         filmix_coll_foreign:      { en: 'Foreign', ru: 'Зарубежные' },
         filmix_coll_russian:      { en: 'Russian', ru: 'Русские' },
         filmix_season:        { en: 'Season',   ru: 'Сезон' },
@@ -165,6 +167,13 @@
         if (params.cat)  url += '&filter='  + params.cat;   // section filter: s0/s7/s14/s93
         if (params.sort) url += '&orderby=' + params.sort;  // date | rating | year | kp_rating
         if (params.page) url += '&page='    + params.page;
+        return url;
+    }
+
+    function popularUrl(params) {
+        var url = API_URL + 'popular?' + authParams();
+        if (params && params.section !== undefined) url += '&section=' + params.section; // 999=movies, 7=series
+        if (params && params.page) url += '&page=' + params.page;
         return url;
     }
 
@@ -768,6 +777,8 @@
 
             var nw = L('filmix_lane_new'), tp = L('filmix_lane_top');
             var rows = [
+                { title: L('filmix_lane_now_movies'), section: 999, mode: 'popular' },
+                { title: L('filmix_lane_now_series'), section: 7,   mode: 'popular' },
                 { title: nw + ' ' + catTitle('s0').toLowerCase(), cat: 's0',  sort: 'date',   genres: 's0'  },
                 { title: L('filmix_lane_new_episodes'),           cat: 's7',  sort: 'date',   genres: 's7'  },
                 { title: tp + ' ' + catTitle('s0').toLowerCase(), cat: 's0',  sort: 'rating', genres: 's0'  },
@@ -793,19 +804,31 @@
             }
 
             rows.forEach(function (row, i) {
-                get(catalogUrl({ cat: row.cat, sort: row.sort, page: 1 }),
+                var reqUrl = row.mode === 'popular'
+                    ? popularUrl({ section: row.section, page: 1 })
+                    : catalogUrl({ cat: row.cat, sort: row.sort, page: 1 });
+
+                get(reqUrl,
                     function (data) {
                         if (Array.isArray(data) && data.length) {
-                            results[i] = {
-                                title:       row.title,
-                                genres:      row.genres,                  // for onMore → category
-                                sort:        row.sort,
-                                url:         laneUrl(row.cat, row.sort),  // "more" → category_full
-                                page:        1,
-                                total_pages: 999,                         // >1 so the "more" element appears
-                                source:      SOURCE_NAME,
-                                results:     data.map(convertCard).filter(Boolean),
-                            };
+                            if (row.mode === 'popular') {
+                                results[i] = {
+                                    title:   row.title,
+                                    source:  SOURCE_NAME,
+                                    results: data.map(convertCard).filter(Boolean),
+                                };
+                            } else {
+                                results[i] = {
+                                    title:       row.title,
+                                    genres:      row.genres,                  // for onMore → category
+                                    sort:        row.sort,
+                                    url:         laneUrl(row.cat, row.sort),  // "more" → category_full
+                                    page:        1,
+                                    total_pages: 999,                         // >1 so the "more" element appears
+                                    source:      SOURCE_NAME,
+                                    results:     data.map(convertCard).filter(Boolean),
+                                };
+                            }
                         }
                         if (++done === rows.length) finish();
                     },
@@ -839,12 +862,14 @@
             if (cat === 's7') {
                 // Series: "New episodes" (recent updates) + "New series" (newest titles) + "Top"
                 lanes = [
+                    { title: L('filmix_lane_now_series'), section: 7, mode: 'popular' },
                     { title: L('filmix_lane_new_episodes'),                    sort: 'date'   },
                     { title: L('filmix_lane_new') + ' ' + name.toLowerCase(),  sort: 'year'   },
                     { title: L('filmix_lane_top') + ' ' + name.toLowerCase(),  sort: 'rating' },
                 ];
             } else {
                 lanes = [
+                    { title: L('filmix_lane_now_movies'), section: 999, mode: 'popular' },
                     { title: L('filmix_lane_latest') + ' ' + name.toLowerCase(), sort: 'date'   },
                     { title: L('filmix_lane_top') + ' ' + name.toLowerCase(),    sort: 'rating' },
                 ];
@@ -865,19 +890,31 @@
             var done = 0;
             lanes.forEach(function (lane, i) {
                 var laneCat = lane.cat || cat;
-                get(catalogUrl({ cat: laneCat, sort: lane.sort, page: 1 }),
+                var reqUrl = lane.mode === 'popular'
+                    ? popularUrl({ section: lane.section, page: 1 })
+                    : catalogUrl({ cat: laneCat, sort: lane.sort, page: 1 });
+
+                get(reqUrl,
                     function (data) {
                         if (Array.isArray(data) && data.length) {
-                            rows[i] = {
-                                title:       lane.title,
-                                genres:      laneCat,
-                                sort:        lane.sort,
-                                url:         laneUrl(laneCat, lane.sort),  // "more" → category_full → list()
-                                page:        1,
-                                total_pages: 999,                         // >1 so the "more" element appears
-                                source:      SOURCE_NAME,
-                                results:     data.map(convertCard).filter(Boolean),
-                            };
+                            if (lane.mode === 'popular') {
+                                rows[i] = {
+                                    title:   lane.title,
+                                    source:  SOURCE_NAME,
+                                    results: data.map(convertCard).filter(Boolean),
+                                };
+                            } else {
+                                rows[i] = {
+                                    title:       lane.title,
+                                    genres:      laneCat,
+                                    sort:        lane.sort,
+                                    url:         laneUrl(laneCat, lane.sort),  // "more" → category_full → list()
+                                    page:        1,
+                                    total_pages: 999,                         // >1 so the "more" element appears
+                                    source:      SOURCE_NAME,
+                                    results:     data.map(convertCard).filter(Boolean),
+                                };
+                            }
                         }
                         if (++done === lanes.length) finish();
                     },
