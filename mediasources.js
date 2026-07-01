@@ -884,13 +884,9 @@
 
     function ensureCommentsPopupStyles() {
         if (document.getElementById('filmix-comments-popup-style')) return;
+        // Only comment-item CSS; Modal provides the container, header, scroll and
+        // keyboard/remote navigation out of the box.
         var css = '' +
-            '.filmix-comments-popup{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:3vh 2vw;}' +
-            '.filmix-comments-popup__dialog{width:min(1100px,96vw);max-height:92vh;display:flex;flex-direction:column;background:rgba(34,38,44,.96);border-radius:18px;box-shadow:0 20px 80px rgba(0,0,0,.45);}' +
-            '.filmix-comments-popup__head{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 14px;border-bottom:1px solid rgba(255,255,255,.12);}' +
-            '.filmix-comments-popup__title{font-size:34px;line-height:1.1;font-weight:600;max-width:80%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
-            '.filmix-comments-popup__close{font-size:24px;line-height:1;padding:8px 12px;border:1px solid rgba(255,255,255,.25);border-radius:10px;cursor:pointer;}' +
-            '.filmix-comments-popup__body{padding:14px 24px 24px;overflow:auto;}' +
             '.filmix-comments-popup__item{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;margin-top:10px;}' +
             '.filmix-comments-popup__meta{opacity:.78;font-size:18px;margin-bottom:8px;}' +
             '.filmix-comments-popup__text{font-size:21px;line-height:1.35;white-space:pre-wrap;word-break:break-word;}' +
@@ -899,7 +895,6 @@
             '.filmix-comments-popup__item--d3{margin-left:54px;}' +
             '.filmix-comments-popup__item--d4{margin-left:72px;}' +
             '.filmix-comments-popup__empty{font-size:24px;opacity:.8;padding:26px 2px;}';
-
         var style = document.createElement('style');
         style.id = 'filmix-comments-popup-style';
         style.textContent = css;
@@ -940,106 +935,36 @@
     }
 
     function closeFilmixCommentsModal() {
-        var existed = document.querySelector('.filmix-comments-popup');
-        if (existed) {
-            if (typeof existed._filmixKeyCleanup === 'function') existed._filmixKeyCleanup();
-            var prevCtrl = existed._filmixPrevCtrl;
-            if (existed.parentNode) existed.parentNode.removeChild(existed);
-            // Restore the Lampa controller that was active before the popup opened.
-            // This is essential so TV remote navigation returns to the full card.
-            try { if (prevCtrl) Lampa.Controller.toggle(prevCtrl); } catch (ex) {}
-        }
+        try { Lampa.Modal.close(); } catch (ex) {}
     }
 
     function openFilmixCommentsModal(title, tree) {
         ensureCommentsPopupStyles();
-        closeFilmixCommentsModal();
 
-        var root = document.createElement('div');
-        root.className = 'filmix-comments-popup';
-
-        var dialog = document.createElement('div');
-        dialog.className = 'filmix-comments-popup__dialog';
-
-        var header = document.createElement('div');
-        header.className = 'filmix-comments-popup__head';
-
-        var h = document.createElement('div');
-        h.className = 'filmix-comments-popup__title';
-        h.textContent = L('filmix_comments_filmix') + (title ? ': ' + title : '');
-
-        var close = document.createElement('div');
-        close.className = 'filmix-comments-popup__close selector';
-        close.textContent = L('filmix_close');
-
-        // doClose is a single teardown entry-point: DOM removal + controller restore.
-        // Assigned to every close trigger (click, hover:enter, backdrop, Controller back).
-        function doClose() { closeFilmixCommentsModal(); }
-        close.addEventListener('click', doClose);
-        // hover:enter = Lampa remote "OK/Enter" on focused .selector element
-        close.addEventListener('hover:enter', doClose);
-
-        header.appendChild(h);
-        header.appendChild(close);
-
-        var body = document.createElement('div');
-        body.className = 'filmix-comments-popup__body scroll--mask';
-        if (tree && tree.length) {
-            body.innerHTML = renderCommentTreeHtml(tree, 0);
-        } else {
-            body.innerHTML = '<div class="filmix-comments-popup__empty">' + escapeHtml(L('filmix_noty_comments_empty')) + '</div>';
-        }
-
-        dialog.appendChild(header);
-        dialog.appendChild(body);
-        root.appendChild(dialog);
-        root.addEventListener('click', function (e) {
-            if (e.target === root) doClose();
-        });
-
-        // Desktop keyboard: PageUp/PageDown/Home/End for scrolling convenience.
-        // Arrow keys and Back are handled by the Lampa Controller registered below.
-        var onPopupKey = function (e) {
-            var key = e.key || '';
-            if (key === 'PageDown')     { e.preventDefault(); e.stopPropagation(); body.scrollTop += Math.round(body.clientHeight * 0.85); }
-            else if (key === 'PageUp') { e.preventDefault(); e.stopPropagation(); body.scrollTop -= Math.round(body.clientHeight * 0.85); }
-            else if (key === 'Home')   { e.preventDefault(); e.stopPropagation(); body.scrollTop = 0; }
-            else if (key === 'End')    { e.preventDefault(); e.stopPropagation(); body.scrollTop = body.scrollHeight; }
-        };
-        document.addEventListener('keydown', onPopupKey, true);
-        root._filmixKeyCleanup = function () {
-            document.removeEventListener('keydown', onPopupKey, true);
-        };
-
-        // --- Lampa Controller registration ---
-        // This makes the Back button on ANY remote close the popup, and wires
-        // Up/Down arrows to scroll the body instead of navigating outside.
-        // collectionSet + collectionFocus puts "Закрыть" in focus so the user
-        // can press Enter/OK on the remote to activate it.
+        // Save the currently active controller so we can restore it on close.
         var prevCtrlName = null;
         try {
             var _prev = Lampa.Controller.enabled();
             if (_prev && _prev.name) prevCtrlName = _prev.name;
         } catch (ex) {}
-        root._filmixPrevCtrl = prevCtrlName;
 
-        try {
-            Lampa.Controller.add('filmix_comments', {
-                toggle: function () {
-                    // jQuery ($) is always available in the Lampa environment.
-                    Lampa.Controller.collectionSet($(dialog));
-                    Lampa.Controller.collectionFocus(close, $(dialog));
-                },
-                up:    function () { body.scrollTop -= 120; },
-                down:  function () { body.scrollTop += 120; },
-                left:  function () {},
-                right: function () {},
-                back:  doClose
-            });
-            Lampa.Controller.toggle('filmix_comments');
-        } catch (ex) {}
+        var content = document.createElement('div');
+        content.innerHTML = (tree && tree.length)
+            ? renderCommentTreeHtml(tree, 0)
+            : '<div class="filmix-comments-popup__empty">' + escapeHtml(L('filmix_noty_comments_empty')) + '</div>';
 
-        document.body.appendChild(root);
+        // Lampa.Modal provides: container, title bar, Lampa.Scroll (keyboard +
+        // remote scroll), Controller context 'modal', Back button, click-outside
+        // to close, swipe-down to close, and CSS animations.
+        Lampa.Modal.open({
+            title: L('filmix_comments_filmix') + (title ? ': ' + title : ''),
+            html: $(content),
+            size: 'large',
+            onBack: function () {
+                Lampa.Modal.close();
+                try { if (prevCtrlName) Lampa.Controller.toggle(prevCtrlName); } catch (ex) {}
+            }
+        });
     }
 
     function showFilmixCommentsPopup(filmixId, title) {
