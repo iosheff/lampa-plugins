@@ -212,6 +212,23 @@ TMDB redirect do not need it.
 - Comments and identifiers are in English; user-facing strings go through i18n.
 - After editing, validate with `node -c mediasources.js`.
 
+## Input model (critical)
+
+- **Keyboard/remote-first UX is mandatory.** Mouse is secondary.
+- **Always choose standard Lampa integration first.** For new UI/UX behavior,
+  first look for native Lampa components/APIs and integrate through them.
+- Any new popup/overlay for user interaction should prefer **Lampa-native UI**
+  (`Lampa.Modal`, `Lampa.Select`) over custom DOM overlays.
+- Do **not** implement custom UI immediately. If no standard Lampa approach is
+  found, propose options and **get explicit agreement** before implementing a
+  custom solution.
+- If a custom interaction layer is unavoidable, it MUST be wired to
+  `Lampa.Controller` (`toggle`, `back`, directional navigation), otherwise TV
+  remotes may not work correctly.
+- The **Back button on remote** must close active UI via controller flow
+  (`Controller.back()`/active controller `back` handler), not only via browser
+  key handlers like `Escape` or `Backspace`.
+
 ## Deploy & testing notes
 
 - Deployed via **GitHub Pages** from the `main` branch.
@@ -221,6 +238,9 @@ TMDB redirect do not need it.
   plugin JS in the browser — a normal reload may run stale code.
   Hard-reload (Ctrl+Shift+R) or re-add the plugin to pick up changes.
 - Live testing is done against the real Lampa instance at `bylampa.online`.
+- For keyboard/remote behavior, **device testing has priority** (TV/STB remote
+  events). Synthetic browser `KeyboardEvent` checks are useful for smoke checks
+  but are not authoritative for Lampa controller behavior.
 
 ### Deploy steps (for AI assistants)
 
@@ -228,8 +248,11 @@ TMDB redirect do not need it.
 2. Validate syntax: `node -c mediasources.js`.
 3. Commit: `git add -A && git commit -m "<message>"`.
 4. Push to main: `git push origin HEAD:main` (or `git push` if already on main).
-5. Wait 1–5 min for GitHub Pages propagation.
-6. Verify in Lampa (hard-reload the page).
+5. Wait for GitHub Pages propagation (usually 1–5 min) and confirm freshness
+   (e.g. compare local/remote SHA with cache-busting query).
+6. Verify in Lampa (`bylampa.online`) after hard-reload.
+7. For input/navigation changes, verify on real TV/STB remote (Back, arrows,
+   Enter/OK), not only in desktop browser.
 
 ### Lampa globals available
 

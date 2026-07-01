@@ -84,6 +84,19 @@ Example query suffix:
 - `/top_views` responds, but in quick probe ignored `section=` filtering.
 - `/catalog` works as expected with `filter=` and `orderby=` (`s0`, `s7`, `s14`, `s93`).
 
+## Verified integration quirks (plugin-side)
+
+- `GET /search` uses `story=` (not `s=`). Requests with `s=` may return empty
+  results without an explicit error.
+- In plugin testing, `/search` required a valid `user_dev_token` for stable
+  non-empty responses.
+- `GET /post/{id}` can return `404` with body like `{ "message": null }` for
+  IDs that are still present in catalog responses.
+- `GET /comments/{id}` returns flat items that should be grouped by `parent_id`
+  to render a thread tree.
+- Titles/descriptions can contain HTML entities (`&#...;`), so decoding is
+  recommended before title matching against external sources.
+
 ## Related web endpoints (site frontend, not app API)
 
 Found in `https://filmix.my/templates/Filmix/media/public/js/site-main.js`:
