@@ -909,12 +909,13 @@
     function ensureCommentsButtonStyles() {
         if (document.getElementById('filmix-comments-button-style')) return;
         var css = '' +
-            '.button--filmix-comments .full-start__text{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;transition:max-width .16s ease,opacity .16s ease,margin-left .16s ease;margin-left:0;}' +
-            '.button--filmix-comments.button--filmix-comments--expanded .full-start__text,' +
-            '.button--filmix-comments:hover .full-start__text,' +
-            '.button--filmix-comments:focus .full-start__text,' +
-            '.button--filmix-comments.focus .full-start__text,' +
-            '.button--filmix-comments.selected .full-start__text{max-width:260px !important;opacity:1 !important;margin-left:8px !important;}';
+            '.button--filmix-comments{position:relative;}' +
+            '.button--filmix-comments::after{content:attr(data-label);position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);background:rgba(10,14,20,.82);border:1px solid rgba(255,255,255,.14);border-radius:12px;height:42px;line-height:40px;padding:0 12px;white-space:nowrap;pointer-events:none;opacity:0;max-width:0;overflow:hidden;transition:max-width .16s ease,opacity .16s ease;}' +
+            '.button--filmix-comments.button--filmix-comments--expanded::after,' +
+            '.button--filmix-comments:hover::after,' +
+            '.button--filmix-comments:focus::after,' +
+            '.button--filmix-comments.focus::after,' +
+            '.button--filmix-comments.selected::after{max-width:320px;opacity:1;}';
         var style = document.createElement('style');
         style.id = 'filmix-comments-button-style';
         style.textContent = css;
@@ -1074,14 +1075,14 @@
         btn.setAttribute('role', 'button');
         btn.setAttribute('title', L('filmix_comments_filmix'));
         btn.setAttribute('aria-label', L('filmix_comments_filmix'));
+        btn.setAttribute('data-label', L('filmix_comments_button'));
         btn.innerHTML =
             '<div class="full-start__icon">' +
             '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M4 5h16v10H8l-4 4V5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>' +
             '<path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
             '</svg>' +
-            '</div>' +
-            '<div class="full-start__text">' + L('filmix_comments_button') + '</div>';
+            '</div>';
 
         var opening = false;
         function activateComments(e) {
@@ -1089,6 +1090,11 @@
                 var key = e.key || '';
                 if (key !== 'Enter' && key !== ' ' && key !== 'Spacebar') return;
                 e.preventDefault();
+            }
+            if (e && (e.type === 'click' || e.type === 'keydown' || e.type === 'keyup' || e.type === 'hover:enter' || e.type === 'hover:click')) {
+                e.preventDefault && e.preventDefault();
+                e.stopPropagation && e.stopPropagation();
+                e.stopImmediatePropagation && e.stopImmediatePropagation();
             }
             if (opening) return;
             opening = true;
@@ -1106,6 +1112,7 @@
         btn.addEventListener('blur',       function () { setExpanded(false); });
         btn.addEventListener('click', activateComments);
         btn.addEventListener('keydown', activateComments);
+        btn.addEventListener('keyup', activateComments);
         btn.addEventListener('hover:enter', activateComments);
         btn.addEventListener('hover:click', activateComments);
 
