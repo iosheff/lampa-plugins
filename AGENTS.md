@@ -93,6 +93,8 @@ Critical integration constraints:
 
 1. After any compact conversation, re-read `.github/copilot-instructions.md` for full
    context before making decisions.
+2. **Be concise.** Keep responses as short as possible. Skip explanations unless
+   explicitly asked.
 2. Always validate syntax (`node -c mediasources.js`) before committing.
 3. Commit and push to `main` after each self-contained change.
 4. For UI/navigation changes, note that device testing (TV remote) is authoritative;

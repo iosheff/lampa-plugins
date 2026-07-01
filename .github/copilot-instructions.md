@@ -216,6 +216,8 @@ TMDB redirect do not need it.
 
 - After any compact conversation, re-read this file before making further
   decisions or code changes.
+- **Be concise.** Keep responses as short as possible. Skip explanations unless
+  explicitly asked.
 
 ## Input model (critical)
 
