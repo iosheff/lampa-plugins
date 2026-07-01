@@ -81,7 +81,16 @@ Example query suffix:
 - `/popular` responds and supports section filter via `section=`:
   - `section=7` returns series-focused list
   - `section=999` returns movies-focused list
-- `/top_views` responds, but in quick probe ignored `section=` filtering.
+  - `section=14` returns cartoons (verified 2026-07-01: 50 items, all `section:14`)
+  - `section=93` returns anime (verified 2026-07-01)
+  - `section=0` behaves like `999` (movies)
+- `/top_views` responds, but ignores `section=`/`filter=` entirely — always
+  returns a movies-only (`s0`) list (re-verified 2026-07-01). Not usable for
+  per-category "now watching".
+- The filmix.gg site's "Сейчас смотрят" sliders are server-rendered from the
+  web-only `/api/movies/list_watched` (Cloudflare-protected, no CORS) — their
+  exact item list/order cannot be reproduced via the app API; `/popular?section=`
+  is the closest equivalent.
 - `/catalog` works as expected with `filter=` and `orderby=` (`s0`, `s7`, `s14`, `s93`).
 
 ## Verified integration quirks (plugin-side)

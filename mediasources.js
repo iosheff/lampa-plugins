@@ -691,9 +691,11 @@
     // Card normalization: Filmix API → Lampa card
     // ─────────────────────────────────────────────────────────────
 
-    // API sections: 0=movie, 7=series, 14=cartoon/cartoon-series, 93=anime
+    // API sections: 0=movie, 7=series, 14=cartoon movies, 93=anime.
+    // Section 14 holds full-length cartoons only (cartoon series live in
+    // section 15, which the plugin does not use) — treat them as movies.
     function isSerial(section) {
-        return section === 7 || section === 93 || section === 14;
+        return section === 7 || section === 93;
     }
 
     // Replaces w140/w220 → w400 in the poster URL (larger image)
@@ -952,11 +954,11 @@
     }
 
     // Maps a Filmix catalog section to the Favorite.continues() type.
-    // s14 (cartoons) has no distinct history type in Lampa → treated as 'tv'.
+    // s14 cards are movies (see isSerial), so their history lands in 'movie'.
     function catToContinueType(cat) {
-        if (cat === 's0')  return 'movie';
+        if (cat === 's0' || cat === 's14') return 'movie';
         if (cat === 's93') return 'anime';
-        return 'tv';   // s7, s14
+        return 'tv';   // s7
     }
 
     function continueCardsForCat(cat) {
