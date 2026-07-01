@@ -14,6 +14,8 @@ Your job is to execute the deploy-and-verify workflow end to end.
 - Never create `working tree` / `git worktree` or additional branches.
 - Do not skip CLI CDN verification.
 - Before browser checks, confirm CDN freshness via curl cache-busting and content/hash comparison.
+- After push, keep polling CDN in a loop until content is fresh or timeout is reached.
+- As soon as CDN is fresh, immediately run browser verification in the same run.
 
 ## Workflow
 1. Inspect git status and current branch.
@@ -23,7 +25,7 @@ Your job is to execute the deploy-and-verify workflow end to end.
    - fetch headers,
    - fetch with cache-busting query,
    - compare content/hash local vs remote,
-   - poll until fresh or report timeout.
+   - poll in a timed loop until fresh, then continue automatically.
 5. Only after CDN is fresh, run browser verification on `http://bylampa.online/` for changed behavior.
 6. Return a concise report with:
    - commit hash,
@@ -49,11 +51,12 @@ Run these commands directly in terminal and include key outputs in the report.
 
 4. CDN propagation check (must pass before browser):
    - `local_hash=$(shasum -a 256 mediasources.js | awk '{print $1}')`
-   - `for i in 1 2 3 4 5 6 7 8; do cb="$(date +%s)-$i"; url="https://iosheff.github.io/lampa-plugins/mediasources.js?cb=$cb"; curl -sS -D /tmp/mediasources_headers_$i.txt "$url" -o /tmp/mediasources_remote_$i.js; remote_hash=$(shasum -a 256 /tmp/mediasources_remote_$i.js | awk '{print $1}'); [ "$local_hash" = "$remote_hash" ] && echo "attempt=$i HASH_MATCH=yes" && break || echo "attempt=$i HASH_MATCH=no"; done`
-   - `grep -iE "cache-control|etag|last-modified|age|x-cache|cf-cache-status" /tmp/mediasources_headers_8.txt || true`
+   - `start_ts=$(date +%s); timeout_sec=900; attempt=0; fresh=0; while true; do attempt=$((attempt+1)); cb="$(date +%s)-$attempt"; url="https://iosheff.github.io/lampa-plugins/mediasources.js?cb=$cb"; curl -sS -D /tmp/mediasources_headers.txt "$url" -o /tmp/mediasources_remote.js; remote_hash=$(shasum -a 256 /tmp/mediasources_remote.js | awk '{print $1}'); if [ "$local_hash" = "$remote_hash" ]; then fresh=1; echo "attempt=$attempt HASH_MATCH=yes"; break; else echo "attempt=$attempt HASH_MATCH=no"; fi; now_ts=$(date +%s); if [ $((now_ts-start_ts)) -ge $timeout_sec ]; then echo "CDN_TIMEOUT=yes"; break; fi; done; [ "$fresh" = "1" ] || exit 2`
+   - `grep -iE "cache-control|etag|last-modified|age|x-cache|cf-cache-status" /tmp/mediasources_headers.txt || true`
 
 5. Browser verification after CDN is fresh:
-   - Open `http://bylampa.online/` and verify the changed behavior.
+   - Open `http://bylampa.online/` and verify the changed behavior in the same run.
+   - Do not stop after successful CDN check; browser verification is mandatory.
 
 ## Constraints
 - Keep actions minimal and targeted to the requested change.
