@@ -16,6 +16,8 @@ Your job is to execute the deploy-and-verify workflow end to end.
 - Before browser checks, confirm CDN freshness via curl cache-busting and content/hash comparison.
 - After push, keep polling CDN in a loop until content is fresh or timeout is reached.
 - As soon as CDN is fresh, immediately run browser verification in the same run.
+- Browser verification must be executed via Chrome DevTools / MCP browser tools.
+- Do not run Playwright scripts (`npx playwright`, Node Playwright, or equivalent) for verification.
 
 ## Workflow
 1. Inspect git status and current branch.
@@ -55,7 +57,7 @@ Run these commands directly in terminal and include key outputs in the report.
    - `grep -iE "cache-control|etag|last-modified|age|x-cache|cf-cache-status" /tmp/mediasources_headers.txt || true`
 
 5. Browser verification after CDN is fresh:
-   - Open `http://bylampa.online/` and verify the changed behavior in the same run.
+   - Open `http://bylampa.online/` and verify the changed behavior in the same run via Chrome DevTools tools.
    - Do not stop after successful CDN check; browser verification is mandatory.
 
 ## Constraints
