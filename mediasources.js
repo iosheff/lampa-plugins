@@ -836,26 +836,40 @@
         return null;
     }
 
+    // Normalizes category tokens that may come from Lampa query params.
+    // TMDB genre 16 corresponds to the cartoons section in Filmix (s14).
+    function normalizeCat(cat) {
+        var v = String(cat || '').trim();
+        if (!v) return 's0';
+        if (v === '16') return 's14';
+        if (/^s\d+$/i.test(v)) return 's' + v.slice(1);
+        if (/^\d+$/.test(v)) return 's' + v;
+        return v;
+    }
+
     function parseCat(params) {
         var cat  = 's0';
         var sort = 'date';
+        var hasExplicitCat = false;
 
-        if (params.genres) cat = String(params.genres);
+        if (params.genres !== undefined && params.genres !== null && params.genres !== '') {
+            cat = normalizeCat(params.genres);
+            hasExplicitCat = true;
+        }
         if (params.sort)   sort = params.sort;
 
         var url = params.url || '';
 
         // direct mapping of theme pages (url=tv / url=movie)
         var mapped = urlToCat(url);
-        if (mapped) cat = mapped;
+        if (mapped && !hasExplicitCat) cat = mapped;
 
         var catM  = url.match(/[?&](?:cat|filter)=([^&]+)/);
         var sortM = url.match(/[?&]sort=([^&]+)/);
-        if (catM)  cat  = catM[1];
+        if (catM)  cat  = normalizeCat(decodeURIComponent(catM[1]));
         if (sortM) sort = sortM[1];
 
-        // normalize: accept 's0' or '0'
-        if (/^\d+$/.test(cat)) cat = 's' + cat;
+        cat = normalizeCat(cat);
 
         return { cat: cat, sort: sort };
     }
