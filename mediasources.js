@@ -1454,8 +1454,8 @@
                     { title: L('filmix_lane_latest') + ' ' + name.toLowerCase(), sort: 'date'   },
                     { title: L('filmix_lane_top') + ' ' + name.toLowerCase(),    sort: 'rating' },
                 ];
-                // Place "Now watching" under "Latest".
-                if (nowWatchingEnabled()) {
+                // Place "Now watching" under "Latest" (except cartoons).
+                if (nowWatchingEnabled() && cat !== 's14') {
                     lanes.splice(1, 0, { title: L('filmix_lane_now_movies'), section: 999, mode: 'popular' });
                 }
             }
