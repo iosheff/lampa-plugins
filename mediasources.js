@@ -914,7 +914,7 @@
             '.button--filmix-comments:hover .full-start__text,' +
             '.button--filmix-comments:focus .full-start__text,' +
             '.button--filmix-comments.focus .full-start__text,' +
-            '.button--filmix-comments.selected .full-start__text{max-width:260px;opacity:1;margin-left:8px;}';
+            '.button--filmix-comments.selected .full-start__text{max-width:260px !important;opacity:1 !important;margin-left:8px !important;}';
         var style = document.createElement('style');
         style.id = 'filmix-comments-button-style';
         style.textContent = css;
