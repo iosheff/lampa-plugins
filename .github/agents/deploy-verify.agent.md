@@ -60,20 +60,6 @@ Run these commands directly in terminal and include key outputs in the report.
    - Open `http://bylampa.online/` and verify the changed behavior in the same run via Chrome DevTools tools.
    - Do not stop after successful CDN check; browser verification is mandatory.
 
-## Chrome DevTools Verification Checklist (mandatory)
-Use Chrome DevTools / MCP browser tools for this step.
-
-1. Open or select page `http://bylampa.online/`.
-2. Navigate to the exact changed-feature URL (provided in task prompt).
-3. Wait until key page text appears (for example category title and first lane title).
-4. Capture a text snapshot and validate lane titles + sample card titles for relevance.
-5. If required by task, validate specific lane content (for example `Продолжить просмотр`) via page text/script inspection.
-6. Include concrete browser evidence in report:
-   - final URL,
-   - visible lane titles,
-   - at least 3 sample card titles from the checked lane,
-   - pass/fail conclusion for requested behavior.
-
 ## Constraints
 - Keep actions minimal and targeted to the requested change.
 - Prefer deterministic shell checks over assumptions.
