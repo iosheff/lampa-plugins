@@ -77,102 +77,37 @@ methods with **positional callbacks**, NOT `params.onComplite`:
   `.catch()` — otherwise exceptions thrown inside the success/build callback
   falsely trigger `onError`.
 
-## Filmix API v2 quirks (verified)
+## Filmix API v2 quirks
 
-Auth query string on every request (token optional, kept only for search):
-```
-app_lang=ru_RU&user_dev_apk=2.1.2&user_dev_id={16-char id}&user_dev_name=Xiaomi
-&user_dev_os=11&user_dev_vendor=Xiaomi&user_dev_token={token}
-```
+> Full reference: [`filmix_api.md`](../filmix_api.md)
 
-- **Catalog**: `GET /catalog?filter=s0|s7|s14|s93&orderby=date|rating|year|kp_rating&page=N`.
-  - ⚠️ The params are `filter` and `orderby`. `cat` and `sort` are **silently
-    ignored** (return a default mixed list).
-  - Sections: `s0`=movies, `s7`=series, `s14`=cartoons, `s93`=anime.
-  - `orderby=date` = recently updated (new episodes); `orderby=year` = newest
-    titles by release year (used for the "New series" lane).
-  - **Country/collection filter**: `filter=<section>-c<id>` where `c6`=Russian,
-    `c996`=Foreign. E.g. `filter=s7-c6` (Russian series), `filter=s0-c996`
-    (foreign films). Works with `orderby`/`page`. `country=`/`category=` params
-    are silently ignored; there are NO `/genres`,`/categories`,`/countries`
-    endpoints (all 404). IDs come from filmix.my URLs like `/seria/c6/`.
-- **Search**: `GET /search?story={query}&{auth}`. ⚠️ The param is `story`, not
-  `s` (which silently returns `[]`). **Requires a token.**
-- **Post details**: `GET /post/{id}?{auth}`. Can return **404 `{message:null}`**
-  for items that exist in the catalog — handle gracefully (fall back to the
-  catalog card + TMDB; never an empty card).
-- **Person**: `GET /person/{id}?{auth}`.
-- Titles/overviews come **HTML-entity-encoded** (e.g. `33 d&#237;as`). They MUST
-  be decoded (`decodeHtml()`) before use, or TMDB matching fails.
-- **No external IDs**: the API does NOT return `tmdb_id`/`kinopoisk_id`/`imdb_id`
-  (only `kp_rating`/`imdb_rating`, often `"-"`). So TMDB matching is by
-  **title + year only**.
-
-### Token (device-activation flow)
-
-The Filmix token = the long `code` returned by `token_request`, which becomes
-valid once the user enters the short `user_code` on filmix.me → Profile →
-Devices. Flow:
-1. `GET /token_request?{auth}` → `{status:'ok', code, user_code}`.
-2. Show `user_code` in a persistent `Lampa.Select.show` dialog.
-3. Poll `GET /user_profile?{auth}&user_dev_token={code}` every 5s — returns `{}`
-   until confirmed, then `{user_data:{...}}`. On `user_data` → save `code` as
-   the token. (There is NO `token_request/check` endpoint.)
-4. `user_dev_id` must stay the SAME between request and all later calls (the
-   token is bound to the device). Persisted in `Lampa.Storage('filmix_device_id')`.
-
-The token is kept **only for the plugin's own `search()`**. Catalog and the
-TMDB redirect do not need it.
+- Catalog: `filter=` + `orderby=` only (`cat=`/`sort=` silently ignored).
+- Sections: `s0`=movies, `s7`=series, `s14`=cartoons, `s93`=anime.
+- Country filter: `filter=<section>-c<id>` (`c6`=Russian, `c996`=Foreign).
+- Search: `story=` param, token required (`s=` returns `[]` silently).
+- `/post/{id}` can 404 for catalog items — handle gracefully, never show empty card.
+- Titles are HTML-entity-encoded — always `decodeHtml()` before TMDB matching.
+- No external IDs — matching is title+year only.
+- Token flow: `GET /token_request` → show `user_code` → poll `/user_profile` every 5s until `user_data` → save `code` as token. `user_dev_id` must be stable.
 
 ## TMDB integration
 
-- `Lampa.TMDB.key` is a **function** — call `Lampa.TMDB.key()` (returns the
-  standard public key). `Lampa.TMDB.api(path)` returns the proxied URL.
-- `tmdbGet(path, onok, onerr, valid)` tries the Lampa proxy first, then falls
-  back to `https://api.themoviedb.org/3/` directly. The optional `valid(data)`
-  predicate retries on the direct host if the proxy returns a 200 that's missing
-  expected data (the proxy sometimes strips `append_to_response`).
-- Detail call uses `append_to_response=credits,recommendations,similar,external_ids,videos`
-  to fill cast (with photos), similar, recommendations, imdb_id in one request.
-- **Redirect mode** (`full()`): search TMDB by decoded title+year (with a
-  no-year fallback retry, since Filmix year often differs from TMDB), then
-  `Lampa.Activity.replace({component:'full', source:'tmdb', id:tmdbId, method})`.
-  `replace` (not `push`) so Back returns to the lane. If the card already carries
-  a `tmdb_id` (from lane enrichment), redirect immediately with no search.
-  ⚠️ The `Activity.replace` MUST be wrapped in `setTimeout(...,0)` — calling it
-  synchronously inside `full()`/onCreate races the activity creation and hangs
-  on an infinite spinner.
+> Details: [`.github/docs/filmix-tmdb.md`](docs/filmix-tmdb.md)
+
+- `Lampa.TMDB.key()` is a function (not a property). `Lampa.TMDB.api(path)` returns the proxied URL.
+- `tmdbGet(path, onok, onerr, valid)` — proxy first, direct fallback; `valid(data)` triggers retry.
+- Detail: `append_to_response=credits,recommendations,similar,external_ids,videos`.
+- **Redirect**: `Lampa.Activity.replace(...)` — use `replace` not `push`, wrap in `setTimeout(...,0)`.
 
 ## Lane enrichment, cache & pagination
 
-- `enrichCards(cards, done)` fills each lane/list card with TMDB
-  rating/poster/backdrop/tmdb_id via `tmdbFindMeta` (one TMDB search per title,
-  concurrency 8). Filmix gives no ratings, so first load of a screen is slow
-  (~150 searches); cached after. Gated by the `filmix_tmdb_cards` toggle.
-- For Filmix serial cards, TMDB title lookup should use `filmix_original_name`
-  (fallback: `original_name`/`name`) because `original_name` may be intentionally
-  empty for quality-badge rendering.
-- **Persistent cache** `_tmdbMeta` (key `tv:|mv: + title|year` → `{m, ts}`) is
-  saved to `Lampa.Storage('filmix_tmdb_cache')` with a **7-day TTL** (soft cap
-  3000, debounced save, pruned in `loadMetaCache()` at init). Warm `category()`
-  ≈ 190ms / 0 network vs ~10s/100 fetches cold.
-- **"more" element + pagination**: each lane row carries `total_pages:999` and
-  `url: 'filmix?filter=<cat>&sort=<sort>'`. Lampa shows the "more" element when
-  `row.total_pages > 1`; clicking opens `category_full` → calls `list()` which
-  paginates (infinite scroll + page indicator). `parseCat()` reads `filter=`/
-  `sort=` from that url authoritatively (handles `s7-c6` collection codes too).
-- **"Continue watching"** lane: `continueCards(type)` uses
-  `Lampa.Favorite.continues('movie'|'tv'|'anime')` (drops viewed/thrown, filters
-  by type) for categories, and `Favorite.get({type:'history'})` minus
-  viewed/thrown for the all-types home lane. Section→type: s0→movie, s93→anime,
-  s7/s14→tv. History cards are already TMDB cards (from the redirect), so no
-  enrichment/"more". NOTE: Lampa only adds to history on **playback start**
-  (`Favorite.add('history', movie, 100)`), not on card open — so the lane is
-  empty until something is actually watched.
-- **Home title fix** (`fixHomeTitle()`, called at the start of `main()`): a
-  third-party custom-home plugin (`surs.js`, action `custom-main`) sets the
-  title as `Главная - filmix` (lowercase source key). We rewrite the active
-  activity title and the `.head__title` DOM to uppercase (`FILMIX`).
+> Details: [`.github/docs/filmix-cache.md`](docs/filmix-cache.md)
+
+- `enrichCards(cards, done)` fills TMDB data per card (concurrency 8). Gated by `filmix_tmdb_cards`.
+- Serial cards: use `filmix_original_name` for TMDB lookup (not `original_name` — intentionally empty).
+- Cache: `Lampa.Storage('filmix_tmdb_cache')`, 7-day TTL, max 3000 entries.
+- Pagination: rows carry `total_pages:999` + `url:'filmix?filter=...'`; `parseCat()` parses the url.
+- Continue watching: `continueCards(type)` — history cards are already TMDB cards, no enrichment needed.
 
 ## Settings (Lampa.SettingsApi → component "mediasources")
 
