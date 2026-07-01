@@ -72,11 +72,12 @@ Use the `L(key)` helper (falls back to `LANG[key].en`).
 Every key must define both `en` and `ru`.
 
 ### Filmix API v2 gotchas
-- Catalog params are `filter=` and `orderby=`; `cat=`/`sort=` are silently ignored.
-- Search param is `story=`; `s=` silently returns `[]`. Requires a token.
-- Titles come HTML-entity-encoded — always run through `decodeHtml()` before use or
-  TMDB matching fails.
-- `/post/{id}` can return 404 for items that exist in the catalog — handle gracefully.
+Full API reference: see [`filmix_api.md`](filmix_api.md).  
+Critical integration constraints:
+- Catalog: `filter=` + `orderby=`; `cat=`/`sort=` silently ignored.
+- Search: param is `story=` (not `s=`); requires a valid token.
+- Titles are HTML-entity-encoded — always `decodeHtml()` before use or TMDB matching fails.
+- `/post/{id}` can 404 for IDs that exist in catalog — handle gracefully, never show an empty card.
 
 ## UX / Input Model (mandatory)
 
