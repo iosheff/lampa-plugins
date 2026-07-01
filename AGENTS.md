@@ -23,7 +23,9 @@ git push origin HEAD:main        # worktree — always push to main explicitly
 ```
 
 Deployed via GitHub Pages: `https://iosheff.github.io/lampa-plugins/mediasources.js`.  
-Propagation takes 1–5 min; hard-reload Lampa (Ctrl+Shift+R) or re-add the plugin.
+Propagation takes 1–5 min; hard-reload Lampa (Ctrl+Shift+R) or re-add the plugin.  
+After propagation, **verify functionality in Chrome via MCP browser tools** — open
+`https://bylampa.online` and exercise the changed feature.
 
 ## Architecture
 

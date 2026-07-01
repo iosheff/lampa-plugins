@@ -256,7 +256,10 @@ TMDB redirect do not need it.
 5. Wait for GitHub Pages propagation (usually 1–5 min) and confirm freshness
    (e.g. compare local/remote SHA with cache-busting query).
 6. Verify in Lampa (`bylampa.online`) after hard-reload.
-7. For input/navigation changes, verify on real TV/STB remote (Back, arrows,
+7. **Check functional behavior in Chrome via MCP browser tools** — open
+   `https://bylampa.online`, navigate to the changed feature, confirm it works
+   as expected (click, keyboard nav, card open, etc.).
+8. For input/navigation changes, verify on real TV/STB remote (Back, arrows,
    Enter/OK), not only in desktop browser.
 
 ### Lampa globals available
