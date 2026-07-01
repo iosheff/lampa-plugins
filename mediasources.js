@@ -972,11 +972,6 @@
         Lampa.Noty.show(L('filmix_noty_comments_loading'));
         get(commentsUrl(filmixId), function (data) {
             var commentsTree = extractCommentsTree(data);
-            if (!commentsTree.length) {
-                Lampa.Noty.show(L('filmix_noty_comments_empty'));
-                return;
-            }
-
             openFilmixCommentsModal(title, commentsTree);
         }, function () {
             Lampa.Noty.show(L('filmix_noty_comments_error'));
