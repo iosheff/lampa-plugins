@@ -42,9 +42,11 @@
         filmix_episode:       { en: 'Episode',  ru: 'Серия' },
         filmix_trailer:       { en: 'Trailer',  ru: 'Трейлер' },
         filmix_filmography:   { en: 'Filmography', ru: 'Фильмография' },
-        filmix_comments_button:{ en: 'Comments', ru: 'Комментарии' },
+        filmix_comments_button:{ en: 'Filmix comments', ru: 'Комментарии Filmix' },
         filmix_comments_title: { en: 'Comments', ru: 'Комментарии' },
         filmix_comments_filmix: { en: 'Filmix comments', ru: 'Комментарии Filmix' },
+        filmix_comments_toggle_name: { en: 'Filmix comments button', ru: 'Кнопка комментариев Filmix' },
+        filmix_comments_toggle_desc: { en: 'Show Filmix comments button on cards.', ru: 'Показывать кнопку комментариев Filmix на карточках.' },
 
         // Settings
         filmix_token_name:        { en: 'Filmix token', ru: 'Токен Filmix' },
@@ -253,6 +255,11 @@
     // Show "Now watching" lanes on home/category pages (enabled by default)
     function nowWatchingEnabled() {
         return settingEnabled('filmix_now_lanes', true);
+    }
+
+    // Show Filmix comments button on full card (enabled by default)
+    function commentsButtonEnabled() {
+        return settingEnabled('filmix_comments_button_enabled', true);
     }
 
     function tmdbKey() {
@@ -899,6 +906,21 @@
         document.head.appendChild(style);
     }
 
+    function ensureCommentsButtonStyles() {
+        if (document.getElementById('filmix-comments-button-style')) return;
+        var css = '' +
+            '.button--filmix-comments .full-start__text{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;transition:max-width .16s ease,opacity .16s ease,margin-left .16s ease;margin-left:0;}' +
+            '.button--filmix-comments.button--filmix-comments--expanded .full-start__text,' +
+            '.button--filmix-comments:hover .full-start__text,' +
+            '.button--filmix-comments:focus .full-start__text,' +
+            '.button--filmix-comments.focus .full-start__text,' +
+            '.button--filmix-comments.selected .full-start__text{max-width:260px;opacity:1;margin-left:8px;}';
+        var style = document.createElement('style');
+        style.id = 'filmix-comments-button-style';
+        style.textContent = css;
+        document.head.appendChild(style);
+    }
+
     function renderCommentTreeHtml(tree, depth) {
         if (!tree || !tree.length) return '';
         var html = '';
@@ -1035,10 +1057,21 @@
         }
 
         var bar = document.querySelector('.full-start-new__buttons');
-        if (!bar || bar.querySelector('.button--filmix-comments')) return;
+        if (!bar) return;
+
+        var oldBtn = bar.querySelector('.button--filmix-comments');
+        if (!commentsButtonEnabled()) {
+            if (oldBtn && oldBtn.parentNode) oldBtn.parentNode.removeChild(oldBtn);
+            return;
+        }
+        if (oldBtn) return;
+
+        ensureCommentsButtonStyles();
 
         var btn = document.createElement('div');
         btn.className = 'full-start__button selector button--filmix-comments';
+        btn.setAttribute('tabindex', '0');
+        btn.setAttribute('role', 'button');
         btn.setAttribute('title', L('filmix_comments_filmix'));
         btn.setAttribute('aria-label', L('filmix_comments_filmix'));
         btn.innerHTML =
@@ -1050,13 +1083,31 @@
             '</div>' +
             '<div class="full-start__text">' + L('filmix_comments_button') + '</div>';
 
-        btn.addEventListener('click', function (e) {
-            if (e) {
+        var opening = false;
+        function activateComments(e) {
+            if (e && e.type === 'keydown') {
+                var key = e.key || '';
+                if (key !== 'Enter' && key !== ' ' && key !== 'Spacebar') return;
                 e.preventDefault();
-                e.stopPropagation();
             }
+            if (opening) return;
+            opening = true;
             showFilmixCommentsPopup(filmixId, card.title || card.name || '');
-        });
+            setTimeout(function () { opening = false; }, 250);
+        }
+
+        function setExpanded(on) {
+            btn.classList.toggle('button--filmix-comments--expanded', !!on);
+        }
+
+        btn.addEventListener('mouseenter', function () { setExpanded(true); });
+        btn.addEventListener('mouseleave', function () { setExpanded(false); });
+        btn.addEventListener('focus',      function () { setExpanded(true); });
+        btn.addEventListener('blur',       function () { setExpanded(false); });
+        btn.addEventListener('click', activateComments);
+        btn.addEventListener('keydown', activateComments);
+        btn.addEventListener('hover:enter', activateComments);
+        btn.addEventListener('hover:click', activateComments);
 
         bar.appendChild(btn);
     }
@@ -1710,6 +1761,20 @@
             field: {
                 name:        L('filmix_now_lanes_name'),
                 description: L('filmix_now_lanes_desc'),
+            },
+        });
+
+        // Filmix comments button toggle
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: {
+                name:      'filmix_comments_button_enabled',
+                type:      'trigger',
+                'default': true,
+            },
+            field: {
+                name:        L('filmix_comments_toggle_name'),
+                description: L('filmix_comments_toggle_desc'),
             },
         });
 
