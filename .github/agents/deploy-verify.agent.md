@@ -1,8 +1,7 @@
 ---
 name: "MediaSources Deploy Agent"
 description: "Use when: deploy plugin, commit and push to main, verify CDN propagation via curl, check cache-busting/hash, then run browser verification on bylampa.online; triggers: deploy, release, publish, push, post-push verification, subagent"
-tools: [read, search, execute, web, agent]
-agents: ["Grep Lite Agent"]
+tools: [read, search, execute, web]
 argument-hint: "Describe what changed and what needs verification"
 user-invocable: true
 ---
@@ -36,5 +35,4 @@ Your job is to execute the deploy-and-verify workflow end to end.
 ## Constraints
 - Keep actions minimal and targeted to the requested change.
 - Prefer deterministic shell checks over assumptions.
-- Delegate pure grep/text-lookup tasks to `Grep Lite Agent` when appropriate.
 - If a step fails, stop and report exact failure point.
