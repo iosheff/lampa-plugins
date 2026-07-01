@@ -768,36 +768,199 @@
         return 'tv';   // s7, s14
     }
 
-    function extractComments(data) {
-        var out = [];
+    function cleanCommentText(s) {
+        if (!s) return '';
+        return decodeHtml(String(s || ''))
+            .replace(/<br\s*\/?\s*>/gi, '\n')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\r/g, '')
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/[ \t]{2,}/g, ' ')
+            .trim();
+    }
 
-        function pushOne(item) {
-            if (!item || typeof item !== 'object') return;
-            var text = item.text || item.comment || item.message || item.body || item.content || '';
+    function escapeHtml(s) {
+        return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function commentUser(item) {
+        var user = item.gast_name || item.user || item.author || item.login || item.name || item.username || '';
+        if (user && typeof user === 'object') user = user.name || user.login || user.username || '';
+        return String(user || '');
+    }
+
+    function commentDate(item) {
+        return String(item.date || item.created_at || item.created || item.time || '');
+    }
+
+    function commentText(item) {
+        return cleanCommentText(item.text || item.comment || item.message || item.body || item.content || '');
+    }
+
+    function commentId(item) {
+        var id = item.id || item.comment_id || item.cid || item._id || '';
+        return String(id || '');
+    }
+
+    function commentParentId(item) {
+        var pid = item.parent_id;
+        if (pid === undefined || pid === null || pid === '') pid = item.parent;
+        if (pid === undefined || pid === null || pid === '') pid = item.reply_to;
+        if (pid === undefined || pid === null || pid === '') pid = item.answer_id;
+        return String(pid || '');
+    }
+
+    function hasCommentPayload(item) {
+        if (!item || typeof item !== 'object') return false;
+        return !!(item.text || item.comment || item.message || item.body || item.content);
+    }
+
+    function collectCommentObjects(node, out) {
+        if (!node) return;
+        if (Array.isArray(node)) {
+            node.forEach(function (x) { collectCommentObjects(x, out); });
+            return;
+        }
+        if (typeof node !== 'object') return;
+        if (hasCommentPayload(node)) out.push(node);
+        Object.keys(node).forEach(function (k) {
+            var v = node[k];
+            if (Array.isArray(v) || (v && typeof v === 'object')) collectCommentObjects(v, out);
+        });
+    }
+
+    function extractCommentsTree(data) {
+        var raw = [];
+        var seen = {};
+        var nodes = [];
+        var byId = {};
+
+        collectCommentObjects(data, raw);
+        raw.forEach(function (item) {
+            var text = commentText(item);
             if (!text) return;
-            var user = item.gast_name || item.user || item.author || item.login || item.name || item.username || '';
-            if (user && typeof user === 'object') user = user.name || user.login || user.username || '';
-            var date = item.date || item.created_at || item.created || item.time || '';
-            out.push({
-                user: String(user || ''),
-                date: String(date || ''),
-                text: String(text || '').replace(/\s+/g, ' ').trim(),
+            var id = commentId(item);
+            var pid = commentParentId(item);
+            var sig = [id, pid, commentUser(item), commentDate(item), text].join('|');
+            if (seen[sig]) return;
+            seen[sig] = 1;
+            nodes.push({
+                id: id,
+                parent_id: pid,
+                user: commentUser(item),
+                date: commentDate(item),
+                text: text,
+                replies: [],
             });
+        });
+
+        nodes.forEach(function (n) {
+            if (n.id) byId[n.id] = n;
+        });
+
+        var roots = [];
+        nodes.forEach(function (n) {
+            if (n.parent_id && byId[n.parent_id] && byId[n.parent_id] !== n) {
+                byId[n.parent_id].replies.push(n);
+            } else {
+                roots.push(n);
+            }
+        });
+
+        return roots;
+    }
+
+    function ensureCommentsPopupStyles() {
+        if (document.getElementById('filmix-comments-popup-style')) return;
+        var css = '' +
+            '.filmix-comments-popup{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:3vh 2vw;}' +
+            '.filmix-comments-popup__dialog{width:min(1100px,96vw);max-height:92vh;display:flex;flex-direction:column;background:rgba(34,38,44,.96);border-radius:18px;box-shadow:0 20px 80px rgba(0,0,0,.45);}' +
+            '.filmix-comments-popup__head{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 14px;border-bottom:1px solid rgba(255,255,255,.12);}' +
+            '.filmix-comments-popup__title{font-size:34px;line-height:1.1;font-weight:600;max-width:80%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+            '.filmix-comments-popup__close{font-size:24px;line-height:1;padding:8px 12px;border:1px solid rgba(255,255,255,.25);border-radius:10px;cursor:pointer;}' +
+            '.filmix-comments-popup__body{padding:14px 24px 24px;overflow:auto;}' +
+            '.filmix-comments-popup__item{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;margin-top:10px;}' +
+            '.filmix-comments-popup__meta{opacity:.78;font-size:18px;margin-bottom:8px;}' +
+            '.filmix-comments-popup__text{font-size:21px;line-height:1.35;white-space:pre-wrap;word-break:break-word;}' +
+            '.filmix-comments-popup__item--d1{margin-left:18px;}' +
+            '.filmix-comments-popup__item--d2{margin-left:36px;}' +
+            '.filmix-comments-popup__item--d3{margin-left:54px;}' +
+            '.filmix-comments-popup__item--d4{margin-left:72px;}' +
+            '.filmix-comments-popup__empty{font-size:24px;opacity:.8;padding:26px 2px;}';
+
+        var style = document.createElement('style');
+        style.id = 'filmix-comments-popup-style';
+        style.textContent = css;
+        document.head.appendChild(style);
+    }
+
+    function renderCommentTreeHtml(tree, depth) {
+        if (!tree || !tree.length) return '';
+        var html = '';
+        tree.forEach(function (c) {
+            var lvl = Math.min(depth, 4);
+            var head = escapeHtml(c.user || 'Filmix');
+            if (c.date) head += ' [' + escapeHtml(c.date) + ']';
+            html +=
+                '<div class="filmix-comments-popup__item filmix-comments-popup__item--d' + lvl + '">' +
+                    '<div class="filmix-comments-popup__meta">' + head + '</div>' +
+                    '<div class="filmix-comments-popup__text">' + escapeHtml(c.text || '') + '</div>' +
+                '</div>';
+            if (c.replies && c.replies.length) html += renderCommentTreeHtml(c.replies, depth + 1);
+        });
+        return html;
+    }
+
+    function closeFilmixCommentsModal() {
+        var existed = document.querySelector('.filmix-comments-popup');
+        if (existed && existed.parentNode) existed.parentNode.removeChild(existed);
+    }
+
+    function openFilmixCommentsModal(title, tree) {
+        ensureCommentsPopupStyles();
+        closeFilmixCommentsModal();
+
+        var root = document.createElement('div');
+        root.className = 'filmix-comments-popup';
+
+        var dialog = document.createElement('div');
+        dialog.className = 'filmix-comments-popup__dialog';
+
+        var header = document.createElement('div');
+        header.className = 'filmix-comments-popup__head';
+
+        var h = document.createElement('div');
+        h.className = 'filmix-comments-popup__title';
+        h.textContent = L('filmix_comments_filmix') + (title ? ': ' + title : '');
+
+        var close = document.createElement('div');
+        close.className = 'filmix-comments-popup__close selector';
+        close.textContent = L('filmix_close');
+        close.addEventListener('click', closeFilmixCommentsModal);
+
+        header.appendChild(h);
+        header.appendChild(close);
+
+        var body = document.createElement('div');
+        body.className = 'filmix-comments-popup__body scroll--mask';
+        if (tree && tree.length) {
+            body.innerHTML = renderCommentTreeHtml(tree, 0);
+        } else {
+            body.innerHTML = '<div class="filmix-comments-popup__empty">' + escapeHtml(L('filmix_noty_comments_empty')) + '</div>';
         }
 
-        function walk(node) {
-            if (!node) return;
-            if (Array.isArray(node)) { node.forEach(walk); return; }
-            if (typeof node !== 'object') return;
-            pushOne(node);
-            Object.keys(node).forEach(function (k) {
-                var v = node[k];
-                if (Array.isArray(v) || (v && typeof v === 'object')) walk(v);
-            });
-        }
-
-        walk(data);
-        return out;
+        dialog.appendChild(header);
+        dialog.appendChild(body);
+        root.appendChild(dialog);
+        root.addEventListener('click', function (e) {
+            if (e.target === root) closeFilmixCommentsModal();
+        });
+        document.body.appendChild(root);
     }
 
     function showFilmixCommentsPopup(filmixId, title) {
@@ -808,24 +971,13 @@
 
         Lampa.Noty.show(L('filmix_noty_comments_loading'));
         get(commentsUrl(filmixId), function (data) {
-            var comments = extractComments(data).slice(0, 40);
-            if (!comments.length) {
+            var commentsTree = extractCommentsTree(data);
+            if (!commentsTree.length) {
                 Lampa.Noty.show(L('filmix_noty_comments_empty'));
                 return;
             }
 
-            var items = comments.map(function (c) {
-                var head = c.user || 'Filmix';
-                if (c.date) head += ' [' + c.date + ']';
-                var txt = c.text.length > 260 ? (c.text.slice(0, 257) + '...') : c.text;
-                return { title: head + '\n' + txt };
-            });
-            items.push({ title: L('filmix_close'), cancel: true });
-
-            Lampa.Select.show({
-                title: L('filmix_comments_filmix') + (title ? ': ' + title : ''),
-                items: items,
-            });
+            openFilmixCommentsModal(title, commentsTree);
         }, function () {
             Lampa.Noty.show(L('filmix_noty_comments_error'));
         });
@@ -900,7 +1052,8 @@
             '<path d="M4 5h16v10H8l-4 4V5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>' +
             '<path d="M8 9h8M8 12h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
             '</svg>' +
-            '</div>';
+            '</div>' +
+            '<div class="full-start__text">' + L('filmix_comments_button') + '</div>';
 
         btn.addEventListener('click', function (e) {
             if (e) {
