@@ -907,6 +907,45 @@
         } catch (e) { return []; }
     }
 
+    function cardHasGenre16(card) {
+        if (!card) return false;
+
+        var ids = card.genre_ids;
+        if (Array.isArray(ids)) {
+            for (var i = 0; i < ids.length; i++) {
+                if (String(ids[i]) === '16') return true;
+            }
+        }
+
+        var genres = card.genres;
+        if (Array.isArray(genres)) {
+            for (var j = 0; j < genres.length; j++) {
+                var g = genres[j];
+                if (g && typeof g === 'object' && String(g.id) === '16') return true;
+                if (String(g) === '16') return true;
+            }
+        }
+
+        return false;
+    }
+
+    function isCartoonHistoryCard(card) {
+        if (cardHasGenre16(card)) return true;
+
+        var genres = card && card.genres;
+        if (!Array.isArray(genres)) return false;
+
+        for (var i = 0; i < genres.length; i++) {
+            var g = genres[i];
+            var name = '';
+            if (g && typeof g === 'object') name = g.name || '';
+            else name = String(g || '');
+            if (/(animation|cartoon|animated|анимац|мульт)/i.test(name)) return true;
+        }
+
+        return false;
+    }
+
     function isCardSerial(card) {
         return !!(card && (card.filmix_is_serial || card.original_name));
     }
@@ -917,6 +956,12 @@
         if (cat === 's0')  return 'movie';
         if (cat === 's93') return 'anime';
         return 'tv';   // s7, s14
+    }
+
+    function continueCardsForCat(cat) {
+        var cards = continueCards(catToContinueType(cat));
+        if (cat !== 's14') return cards;
+        return cards.filter(isCartoonHistoryCard).slice(0, 19);
     }
 
     function cleanCommentText(s) {
@@ -1465,7 +1510,7 @@
             function finish() {
                 var out = rows.filter(function (r) { return r && r.results && r.results.length; });
                 // "Continue watching" filtered by this category's type — first lane.
-                var cont = continueCards(catToContinueType(cat));
+                var cont = continueCardsForCat(cat);
                 var contRow = cont.length ? { title: L('filmix_lane_continue'), results: cont } : null;
                 if (!out.length && !contRow) { (onerror || function () {})(); return; }
                 var all = out.reduce(function (acc, r) { return acc.concat(r.results); }, []);

@@ -153,6 +153,35 @@ methods with **positional callbacks**, NOT `params.onComplite`:
   decisions or code changes.
 - **Be concise.** Keep responses as short as possible. Skip explanations unless
   explicitly asked.
+- Apply the canonical subagent selection rules below.
+
+## Subagent Selection Rules (Canonical)
+
+- Use **"Code Researcher Agent"** proactively for read-only investigation tasks.
+- Triggers: code research, repo/file search, grep/ripgrep, symbol usage lookup,
+  log reading, module investigation, "where is X used/defined", audits/reviews
+  without edits.
+- Scope: read-only exploration and reporting.
+- Do not use **"Code Researcher Agent"** for edits, commits, pushes, or
+  deployment actions.
+
+- Use **"MediaSources Deploy Agent"** for deployment workflows.
+- Triggers: deploy, release, publish, push-to-main for release, post-push
+  verification, CDN freshness checks, browser verification after deploy.
+- Required flow: syntax validation when code changed, commit+push to `main`, CDN
+  propagation verification via curl/hash, then browser verification on
+  `http://bylampa.online/`.
+- Do not perform manual deploy from the main coding agent.
+
+- Precedence:
+- If task is primarily investigation, use **"Code Researcher Agent"** first.
+- If task includes deployment, hand off deployment execution to
+  **"MediaSources Deploy Agent"**.
+- If both apply, do investigation first, then deploy via
+  **"MediaSources Deploy Agent"**.
+
+- Fallback:
+- If no trigger matches, continue in main agent mode.
 
 ## Input model (critical)
 
@@ -175,6 +204,7 @@ methods with **positional callbacks**, NOT `params.onComplite`:
 
 - Deployed via **GitHub Pages** from the `main` branch.
 - Plugin URL: `https://iosheff.github.io/lampa-plugins/mediasources.js`.
+- **Deployment execution rule:** see canonical subagent selection rules above.
 - **Workflow**: commit and push directly to `main` (no PRs needed).
 - **Branch constraint:** all development is done in `main` only; never create
   `working tree` / `git worktree` for this repository.
@@ -190,15 +220,9 @@ methods with **positional callbacks**, NOT `params.onComplite`:
 
 1. Make changes to `mediasources.js`.
 2. Validate syntax: `node -c mediasources.js`.
-3. Commit: `git add -A && git commit -m "<message>"`.
-4. Push to main: `git push origin HEAD:main` (or `git push` if already on main).
-5. Wait for GitHub Pages propagation (usually 1–5 min) and confirm freshness
-   (e.g. compare local/remote SHA with cache-busting query).
-6. Verify in Lampa (`http://bylampa.online/`) after hard-reload.
-7. **Check functional behavior in Chrome via MCP browser tools** — open
-  `http://bylampa.online/`, navigate to the changed feature, confirm it works
-   as expected (click, keyboard nav, card open, etc.).
-8. For input/navigation changes, verify on real TV/STB remote (Back, arrows,
+3. Invoke subagent **"MediaSources Deploy Agent"** to execute deploy end-to-end
+  (commit/push, CDN freshness checks, and browser verification).
+4. For input/navigation changes, verify on real TV/STB remote (Back, arrows,
    Enter/OK), not only in desktop browser.
 
 ### Lampa globals available

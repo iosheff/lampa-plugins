@@ -17,9 +17,9 @@ redirects card opens to native TMDB pages.
 # Syntax validation (required before every commit)
 node -c mediasources.js
 
-# Commit and deploy
-git add -A && git commit -m "<message>"
-git push origin HEAD:main        # always push to main explicitly
+# Deployment execution rule
+# Always invoke subagent "MediaSources Deploy Agent" for deploy.
+# Do not deploy manually from the main coding agent.
 ```
 
 Development policy: work only in the `main` branch. Do not create
@@ -98,8 +98,36 @@ Critical integration constraints:
    context before making decisions.
 2. **Be concise.** Keep responses as short as possible. Skip explanations unless
    explicitly asked.
-2. Always validate syntax (`node -c mediasources.js`) before committing.
-3. Commit and push to `main` after each self-contained change.
-4. For UI/navigation changes, note that device testing (TV remote) is authoritative;
+3. Always validate syntax (`node -c mediasources.js`) before committing.
+4. Apply the canonical subagent rules in the section below.
+5. For UI/navigation changes, note that device testing (TV remote) is authoritative;
    desktop `KeyboardEvent` tests are informational only.
-5. Do not add features, refactor, or improve beyond what was asked.
+6. Do not add features, refactor, or improve beyond what was asked.
+
+## Subagent Selection Rules (Canonical)
+
+- Use **"Code Researcher Agent"** proactively for read-only investigation tasks.
+- Triggers: code research, repo/file search, grep/ripgrep, symbol usage lookup,
+  log reading, module investigation, "where is X used/defined", audits/reviews
+  without edits.
+- Scope: read-only exploration and reporting.
+- Do not use **"Code Researcher Agent"** for edits, commits, pushes, or
+  deployment actions.
+
+- Use **"MediaSources Deploy Agent"** for deployment workflows.
+- Triggers: deploy, release, publish, push-to-main for release, post-push
+  verification, CDN freshness checks, browser verification after deploy.
+- Required flow: syntax validation when code changed, commit+push to `main`, CDN
+  propagation verification via curl/hash, then browser verification on
+  `http://bylampa.online/`.
+- Do not perform manual deploy from the main coding agent.
+
+- Precedence:
+- If task is primarily investigation, use **"Code Researcher Agent"** first.
+- If task includes deployment, hand off deployment execution to
+  **"MediaSources Deploy Agent"**.
+- If both apply, do investigation first, then deploy via
+  **"MediaSources Deploy Agent"**.
+
+- Fallback:
+- If no trigger matches, continue in main agent mode.

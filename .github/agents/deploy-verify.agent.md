@@ -32,6 +32,29 @@ Your job is to execute the deploy-and-verify workflow end to end.
    - browser verification result,
    - blockers (if any).
 
+## Terminal Command Checklist
+Run these commands directly in terminal and include key outputs in the report.
+
+1. Status and branch:
+   - `git status --short`
+   - `git branch --show-current`
+
+2. Syntax validation (when code changed):
+   - `node -c mediasources.js`
+
+3. Commit and push:
+   - `git add -A`
+   - `git commit -m "<message>"`
+   - `git push origin HEAD:main`
+
+4. CDN propagation check (must pass before browser):
+   - `local_hash=$(shasum -a 256 mediasources.js | awk '{print $1}')`
+   - `for i in 1 2 3 4 5 6 7 8; do cb="$(date +%s)-$i"; url="https://iosheff.github.io/lampa-plugins/mediasources.js?cb=$cb"; curl -sS -D /tmp/mediasources_headers_$i.txt "$url" -o /tmp/mediasources_remote_$i.js; remote_hash=$(shasum -a 256 /tmp/mediasources_remote_$i.js | awk '{print $1}'); [ "$local_hash" = "$remote_hash" ] && echo "attempt=$i HASH_MATCH=yes" && break || echo "attempt=$i HASH_MATCH=no"; done`
+   - `grep -iE "cache-control|etag|last-modified|age|x-cache|cf-cache-status" /tmp/mediasources_headers_8.txt || true`
+
+5. Browser verification after CDN is fresh:
+   - Open `http://bylampa.online/` and verify the changed behavior.
+
 ## Constraints
 - Keep actions minimal and targeted to the requested change.
 - Prefer deterministic shell checks over assumptions.
