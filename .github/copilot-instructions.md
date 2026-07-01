@@ -176,6 +176,8 @@ methods with **positional callbacks**, NOT `params.onComplite`:
 - Deployed via **GitHub Pages** from the `main` branch.
 - Plugin URL: `https://iosheff.github.io/lampa-plugins/mediasources.js`.
 - **Workflow**: commit and push directly to `main` (no PRs needed).
+- **Branch constraint:** all development is done in `main` only; never create
+  `working tree` / `git worktree` for this repository.
 - **Propagation is often slow (1–5 min)** after a push, and Lampa caches
   plugin JS in the browser — a normal reload may run stale code.
   Hard-reload (Ctrl+Shift+R) or re-add the plugin to pick up changes.

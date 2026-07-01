@@ -19,8 +19,11 @@ node -c mediasources.js
 
 # Commit and deploy
 git add -A && git commit -m "<message>"
-git push origin HEAD:main        # worktree — always push to main explicitly
+git push origin HEAD:main        # always push to main explicitly
 ```
+
+Development policy: work only in the `main` branch. Do not create
+`working tree` / `git worktree` or additional branches.
 
 Deployed via GitHub Pages: `https://iosheff.github.io/lampa-plugins/mediasources.js`.  
 Propagation takes 1–5 min; hard-reload Lampa (Ctrl+Shift+R) or re-add the plugin.  

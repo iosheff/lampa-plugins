@@ -20,6 +20,8 @@ See [AGENTS.md](AGENTS.md) for project overview, conventions, and workflow.
 - Use `fetch().then(ok, err)` two-arg form — never `.catch()`.
 - Settings toggles are stored as strings — never parse with `!!value`.
 - Titles from Filmix are HTML-entity-encoded — always `decodeHtml()` before use.
+- Work only in the `main` branch.
+- Do not create `working tree` / `git worktree` or additional branches.
 
 ## Build & deploy
 
