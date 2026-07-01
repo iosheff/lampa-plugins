@@ -94,7 +94,8 @@
         filmix_noty_comments_loading: { en: 'Filmix: loading comments…', ru: 'Filmix: загружаю комментарии…' },
         filmix_noty_comments_empty:   { en: 'Filmix: no comments yet', ru: 'Filmix: комментариев пока нет' },
         filmix_noty_comments_error:   { en: 'Filmix: failed to load comments', ru: 'Filmix: не удалось загрузить комментарии' },
-        filmix_noty_comments_missing: { en: 'Filmix: no linked item for comments', ru: 'Filmix: нет связанного объекта для комментариев' },
+        filmix_noty_comments_missing:   { en: 'Filmix: title not found on Filmix', ru: 'Filmix: фильм/сериал не найден на Filmix' },
+        filmix_noty_comments_searching: { en: 'Filmix: searching…', ru: 'Filmix: ищу…' },
 
         // Device-linking dialog
         filmix_link_dialog_title: { en: 'Filmix linking — code:', ru: 'Привязка Filmix — код:' },
@@ -192,6 +193,135 @@
     function searchUrl(query) {
         // search parameter is story= (s= silently returns []); requires a token
         return API_URL + 'search?' + authParams() + '&story=' + encodeURIComponent(query);
+    }
+
+    function suggestUrl(query) {
+        // autocomplete endpoint; no token required per API docs
+        return API_URL + 'suggest?' + authParams() + '&word=' + encodeURIComponent(query);
+    }
+
+    // ── On-demand Filmix ID lookup helpers ─────────────────────────────────
+
+    // Extract release year from a TMDB card object (0 if unavailable).
+    function cardYear(card) {
+        var d = (card && (card.first_air_date || card.release_date)) || '';
+        return d ? (parseInt(d.split('-')[0], 10) || 0) : 0;
+    }
+
+    // Normalize a title for fuzzy comparison: lowercase, collapse whitespace,
+    // strip most punctuation.
+    function normTitle(t) {
+        return String(t || '').toLowerCase()
+            .replace(/[^\wа-яёa-z0-9\s]/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    // Scan a raw Filmix result list for the first item whose (decoded) title
+    // matches any of normTitles, with year within ±1.  Returns filmix id or null.
+    // Requires year match to prevent false-positive caching.
+    function filmixMatchInList(list, normTitles, year) {
+        if (!Array.isArray(list)) return null;
+        for (var i = 0; i < list.length; i++) {
+            var item = list[i];
+            if (!item || !item.id) continue;
+            var fxYear = parseInt(item.year || '', 10) || 0;
+            // year must match within ±1 if both sides have a year
+            if (year && fxYear && Math.abs(fxYear - year) > 1) continue;
+            var fxTitles = [
+                normTitle(decodeHtml(item.title || '')),
+                normTitle(decodeHtml(item.original_title || ''))
+            ];
+            for (var a = 0; a < normTitles.length; a++) {
+                if (!normTitles[a]) continue;
+                for (var b = 0; b < fxTitles.length; b++) {
+                    if (fxTitles[b] && fxTitles[b] === normTitles[a]) {
+                        return String(item.id);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    // Unwrap Filmix API responses that may come as a plain array or
+    // wrapped in { results:[], data:[], items:[] }.
+    function unwrapList(data) {
+        if (Array.isArray(data)) return data;
+        if (data && Array.isArray(data.results)) return data.results;
+        if (data && Array.isArray(data.data))    return data.data;
+        if (data && Array.isArray(data.items))   return data.items;
+        return [];
+    }
+
+    // On-demand lookup: try to find the Filmix ID for a TMDB card by title+year.
+    // Strategy:
+    //   1. Build title variants from the TMDB card (title, name, original_title,
+    //      original_name) and normalise them.
+    //   2. Try /suggest?word= for each variant (no token required, fast).
+    //   3. If nothing matched, try /search?story= for each variant (token required).
+    // A match is accepted only when year is within ±1 (both sides have a year).
+    // Successful lookup is cached in filmix_tmdb_links via rememberTmdbFilmix.
+    function findFilmixIdByTitle(card, tmdbId, onFound, onNotFound) {
+        var year = cardYear(card);
+
+        // Collect unique non-empty normalised title variants from the TMDB card.
+        var rawTitles = [
+            card.title,
+            card.name,
+            card.original_title,
+            card.original_name
+        ];
+        var normTitles = [];
+        rawTitles.forEach(function (t) {
+            var n = normTitle(t);
+            if (n && normTitles.indexOf(n) === -1) normTitles.push(n);
+        });
+        // Also try raw (non-normalised) for the suggest/search query strings.
+        var queryTitles = [];
+        rawTitles.forEach(function (t) {
+            var s = String(t || '').trim();
+            if (s && queryTitles.indexOf(s) === -1) queryTitles.push(s);
+        });
+
+        if (!queryTitles.length) { onNotFound(); return; }
+
+        var resolved = false;
+
+        function done(filmixId) {
+            if (resolved) return;
+            resolved = true;
+            rememberTmdbFilmix(tmdbId, filmixId);
+            onFound(String(filmixId));
+        }
+
+        // Phase 2: /search with token (fallback if suggest found nothing).
+        function trySearch(idx) {
+            if (resolved) return;
+            if (idx >= queryTitles.length) { onNotFound(); return; }
+            get(searchUrl(queryTitles[idx]), function (data) {
+                if (resolved) return;
+                var match = filmixMatchInList(unwrapList(data), normTitles, year);
+                if (match) { done(match); } else { trySearch(idx + 1); }
+            }, function () { trySearch(idx + 1); });
+        }
+
+        // Phase 1: /suggest (no token) — try each title variant in sequence.
+        function trySuggest(idx) {
+            if (resolved) return;
+            if (idx >= queryTitles.length) {
+                // Suggest exhausted — fall back to /search if token is present.
+                if (token()) { trySearch(0); } else { onNotFound(); }
+                return;
+            }
+            get(suggestUrl(queryTitles[idx]), function (data) {
+                if (resolved) return;
+                var match = filmixMatchInList(unwrapList(data), normTitles, year);
+                if (match) { done(match); } else { trySuggest(idx + 1); }
+            }, function () { trySuggest(idx + 1); });
+        }
+
+        trySuggest(0);
     }
 
     function postUrl(id)   { return API_URL + 'post/'   + id + '?' + authParams(); }
@@ -967,19 +1097,38 @@
         });
     }
 
-    function showFilmixCommentsPopup(filmixId, title) {
-        if (!filmixId) {
-            Lampa.Noty.show(L('filmix_noty_comments_missing'));
+    // filmixId  – resolved id, or null/0 when opened from history (no filmix link)
+    // title     – display title for the modal header
+    // card      – TMDB card object (optional, used for on-demand ID lookup)
+    // tmdbId    – TMDB id of the card (optional, used to persist the lookup)
+    function showFilmixCommentsPopup(filmixId, title, card, tmdbId) {
+        function loadComments(fxId) {
+            Lampa.Noty.show(L('filmix_noty_comments_loading'));
+            get(commentsUrl(fxId), function (data) {
+                var commentsTree = extractCommentsTree(data);
+                openFilmixCommentsModal(title, commentsTree);
+            }, function () {
+                Lampa.Noty.show(L('filmix_noty_comments_error'));
+            });
+        }
+
+        if (filmixId) {
+            loadComments(filmixId);
             return;
         }
 
-        Lampa.Noty.show(L('filmix_noty_comments_loading'));
-        get(commentsUrl(filmixId), function (data) {
-            var commentsTree = extractCommentsTree(data);
-            openFilmixCommentsModal(title, commentsTree);
-        }, function () {
-            Lampa.Noty.show(L('filmix_noty_comments_error'));
-        });
+        // No pre-resolved ID — attempt on-demand lookup if we have a card.
+        if (card && tmdbId) {
+            Lampa.Noty.show(L('filmix_noty_comments_searching'));
+            findFilmixIdByTitle(card, tmdbId, function (fxId) {
+                loadComments(fxId);
+            }, function () {
+                Lampa.Noty.show(L('filmix_noty_comments_missing'));
+            });
+            return;
+        }
+
+        Lampa.Noty.show(L('filmix_noty_comments_missing'));
     }
 
     function getQueryParam(name) {
@@ -1077,7 +1226,7 @@
             }
             if (opening) return;
             opening = true;
-            showFilmixCommentsPopup(filmixId, card.title || card.name || '');
+            showFilmixCommentsPopup(filmixId, card.title || card.name || '', card, tmdbId);
             setTimeout(function () { opening = false; }, 300);
         }
 

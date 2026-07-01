@@ -212,6 +212,11 @@ TMDB redirect do not need it.
 - Comments and identifiers are in English; user-facing strings go through i18n.
 - After editing, validate with `node -c mediasources.js`.
 
+## Assistant workflow
+
+- After any compact conversation, re-read this file before making further
+  decisions or code changes.
+
 ## Input model (critical)
 
 - **Keyboard/remote-first UX is mandatory.** Mouse is secondary.
