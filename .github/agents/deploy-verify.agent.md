@@ -56,9 +56,13 @@ Run these commands directly in terminal and include key outputs in the report.
    - `start_ts=$(date +%s); timeout_sec=900; attempt=0; fresh=0; while true; do attempt=$((attempt+1)); cb="$(date +%s)-$attempt"; url="https://iosheff.github.io/lampa-plugins/mediasources.js?cb=$cb"; curl -sS -D /tmp/mediasources_headers.txt "$url" -o /tmp/mediasources_remote.js; remote_hash=$(shasum -a 256 /tmp/mediasources_remote.js | awk '{print $1}'); if [ "$local_hash" = "$remote_hash" ]; then fresh=1; echo "attempt=$attempt HASH_MATCH=yes"; break; else echo "attempt=$attempt HASH_MATCH=no"; fi; now_ts=$(date +%s); if [ $((now_ts-start_ts)) -ge $timeout_sec ]; then echo "CDN_TIMEOUT=yes"; break; fi; done; [ "$fresh" = "1" ] || exit 2`
    - `grep -iE "cache-control|etag|last-modified|age|x-cache|cf-cache-status" /tmp/mediasources_headers.txt || true`
 
-5. Browser verification after CDN is fresh:
-   - Open `http://bylampa.online/` and verify the changed behavior in the same run via Chrome DevTools tools.
-   - Do not stop after successful CDN check; browser verification is mandatory.
+5. Browser verification after CDN is fresh — use MCP chrome-devtools tools only:
+   - `mcp_chrome_devtoo_list_pages` → select or confirm the active Chrome page.
+   - `mcp_chrome_devtoo_navigate_page` → open the target URL provided in the task.
+   - `mcp_chrome_devtoo_wait_for` → wait for key text to appear before reading.
+   - `mcp_chrome_devtoo_take_snapshot` or `mcp_chrome_devtoo_evaluate_script` → extract page content and verify the changed behavior.
+   - Do NOT use Playwright, puppeteer, headless Node scripts, or any other browser automation tool.
+   - Do not stop after a successful CDN check; browser verification is mandatory.
 
 ## Constraints
 - Keep actions minimal and targeted to the requested change.

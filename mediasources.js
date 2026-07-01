@@ -34,8 +34,9 @@
         filmix_lane_latest:   { en: 'Latest',   ru: 'Последние' },
         filmix_lane_new_episodes: { en: 'New series episodes', ru: 'Новые эпизоды сериалов' },
         filmix_lane_continue:     { en: 'Continue watching', ru: 'Продолжить просмотр' },
-        filmix_lane_now_movies:   { en: 'Now watching movies', ru: 'Сейчас смотрят фильмы' },
-        filmix_lane_now_series:   { en: 'Now watching series', ru: 'Сейчас смотрят сериалы' },
+        filmix_lane_now_movies:    { en: 'Now watching movies',    ru: 'Сейчас смотрят фильмы' },
+        filmix_lane_now_series:    { en: 'Now watching series',    ru: 'Сейчас смотрят сериалы' },
+        filmix_lane_now_cartoons:  { en: 'Now watching cartoons',  ru: 'Сейчас смотрят мультфильмы' },
         filmix_coll_foreign:      { en: 'Foreign', ru: 'Зарубежные' },
         filmix_coll_russian:      { en: 'Russian', ru: 'Русские' },
         filmix_season:        { en: 'Season',   ru: 'Сезон' },
@@ -1454,9 +1455,12 @@
                     { title: L('filmix_lane_latest') + ' ' + name.toLowerCase(), sort: 'date'   },
                     { title: L('filmix_lane_top') + ' ' + name.toLowerCase(),    sort: 'rating' },
                 ];
-                // Place "Now watching" under "Latest" (except cartoons).
-                if (nowWatchingEnabled() && cat !== 's14') {
-                    lanes.splice(1, 0, { title: L('filmix_lane_now_movies'), section: 999, mode: 'popular' });
+                // Place "Now watching" under "Latest".
+                if (nowWatchingEnabled()) {
+                    lanes.splice(1, 0, cat === 's14'
+                        ? { title: L('filmix_lane_now_cartoons'), section: 14, mode: 'popular' }
+                        : { title: L('filmix_lane_now_movies'),   section: 999, mode: 'popular' }
+                    );
                 }
             }
 
