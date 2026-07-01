@@ -943,7 +943,11 @@
         var existed = document.querySelector('.filmix-comments-popup');
         if (existed) {
             if (typeof existed._filmixKeyCleanup === 'function') existed._filmixKeyCleanup();
+            var prevCtrl = existed._filmixPrevCtrl;
             if (existed.parentNode) existed.parentNode.removeChild(existed);
+            // Restore the Lampa controller that was active before the popup opened.
+            // This is essential so TV remote navigation returns to the full card.
+            try { if (prevCtrl) Lampa.Controller.toggle(prevCtrl); } catch (ex) {}
         }
     }
 
@@ -967,7 +971,13 @@
         var close = document.createElement('div');
         close.className = 'filmix-comments-popup__close selector';
         close.textContent = L('filmix_close');
-        close.addEventListener('click', closeFilmixCommentsModal);
+
+        // doClose is a single teardown entry-point: DOM removal + controller restore.
+        // Assigned to every close trigger (click, hover:enter, backdrop, Controller back).
+        function doClose() { closeFilmixCommentsModal(); }
+        close.addEventListener('click', doClose);
+        // hover:enter = Lampa remote "OK/Enter" on focused .selector element
+        close.addEventListener('hover:enter', doClose);
 
         header.appendChild(h);
         header.appendChild(close);
@@ -984,32 +994,50 @@
         dialog.appendChild(body);
         root.appendChild(dialog);
         root.addEventListener('click', function (e) {
-            if (e.target === root) closeFilmixCommentsModal();
+            if (e.target === root) doClose();
         });
 
-        // Keyboard scroll + Escape/Backspace to close — capture phase so
-        // Lampa's own controller does not swallow the events first.
+        // Desktop keyboard: PageUp/PageDown/Home/End for scrolling convenience.
+        // Arrow keys and Back are handled by the Lampa Controller registered below.
         var onPopupKey = function (e) {
             var key = e.key || '';
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            if (key === 'Escape' || key === 'Backspace') {
-                e.preventDefault();
-                closeFilmixCommentsModal();
-                return;
-            }
-            var step = 100;
-            if (key === 'ArrowDown'  || key === 'Down')  { e.preventDefault(); body.scrollTop += step; }
-            else if (key === 'ArrowUp'   || key === 'Up')    { e.preventDefault(); body.scrollTop -= step; }
-            else if (key === 'PageDown')                     { e.preventDefault(); body.scrollTop += Math.round(body.clientHeight * 0.85); }
-            else if (key === 'PageUp')                       { e.preventDefault(); body.scrollTop -= Math.round(body.clientHeight * 0.85); }
-            else if (key === 'Home')                         { e.preventDefault(); body.scrollTop = 0; }
-            else if (key === 'End')                          { e.preventDefault(); body.scrollTop = body.scrollHeight; }
+            if (key === 'PageDown')     { e.preventDefault(); e.stopPropagation(); body.scrollTop += Math.round(body.clientHeight * 0.85); }
+            else if (key === 'PageUp') { e.preventDefault(); e.stopPropagation(); body.scrollTop -= Math.round(body.clientHeight * 0.85); }
+            else if (key === 'Home')   { e.preventDefault(); e.stopPropagation(); body.scrollTop = 0; }
+            else if (key === 'End')    { e.preventDefault(); e.stopPropagation(); body.scrollTop = body.scrollHeight; }
         };
         document.addEventListener('keydown', onPopupKey, true);
         root._filmixKeyCleanup = function () {
             document.removeEventListener('keydown', onPopupKey, true);
         };
+
+        // --- Lampa Controller registration ---
+        // This makes the Back button on ANY remote close the popup, and wires
+        // Up/Down arrows to scroll the body instead of navigating outside.
+        // collectionSet + collectionFocus puts "Закрыть" in focus so the user
+        // can press Enter/OK on the remote to activate it.
+        var prevCtrlName = null;
+        try {
+            var _prev = Lampa.Controller.enabled();
+            if (_prev && _prev.name) prevCtrlName = _prev.name;
+        } catch (ex) {}
+        root._filmixPrevCtrl = prevCtrlName;
+
+        try {
+            Lampa.Controller.add('filmix_comments', {
+                toggle: function () {
+                    // jQuery ($) is always available in the Lampa environment.
+                    Lampa.Controller.collectionSet($(dialog));
+                    Lampa.Controller.collectionFocus(close, $(dialog));
+                },
+                up:    function () { body.scrollTop -= 120; },
+                down:  function () { body.scrollTop += 120; },
+                left:  function () {},
+                right: function () {},
+                back:  doClose
+            });
+            Lampa.Controller.toggle('filmix_comments');
+        } catch (ex) {}
 
         document.body.appendChild(root);
     }
