@@ -1140,19 +1140,22 @@
         if (window.filmix_comments_watcher_started) return;
         window.filmix_comments_watcher_started = true;
 
-        // Hook into Lampa activity events for fast injection right when the card opens.
-        // This is much more reliable than waiting for the setInterval tick.
+        // Standard Lampa hook: fired by Lampa itself when the full card is done.
+        // 'complite' has e.body (jQuery DOM), e.props, e.data, e.object.
+        // We still use tryInjectCommentsButton so filmix_id resolution stays in one place.
         try {
-            Lampa.Listener.follow('activity', function (e) {
-                if (e.type === 'start') {
-                    setTimeout(tryInjectCommentsButton, 150);
-                    setTimeout(tryInjectCommentsButton, 600);
+            Lampa.Listener.follow('full', function (e) {
+                if (e.type === 'complite' || e.type === 'start') {
+                    // Toggle fires right after 'complite'; defer one tick so the
+                    // controller and DOM settle before we append the button.
+                    setTimeout(tryInjectCommentsButton, 0);
                 }
             });
         } catch (ex) {}
 
-        // Keep a low-frequency interval as a safety net (e.g. after tab switches).
-        setInterval(tryInjectCommentsButton, 1500);
+        // Minimal fallback interval for tab-switch re-renders that don't fire
+        // a new 'full' event (Lampa reuses the existing component instance).
+        setInterval(tryInjectCommentsButton, 3000);
     }
 
     // The home title is built by a custom-home plugin as "Главная - filmix"
