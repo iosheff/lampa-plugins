@@ -181,7 +181,7 @@ methods with **positional callbacks**, NOT `params.onComplite`:
 - **Propagation is often slow (1–5 min)** after a push, and Lampa caches
   plugin JS in the browser — a normal reload may run stale code.
   Hard-reload (Ctrl+Shift+R) or re-add the plugin to pick up changes.
-- Live testing is done against the real Lampa instance at `bylampa.online`.
+- Live testing is done against the real Lampa instance at `http://bylampa.online/`.
 - For keyboard/remote behavior, **device testing has priority** (TV/STB remote
   events). Synthetic browser `KeyboardEvent` checks are useful for smoke checks
   but are not authoritative for Lampa controller behavior.
@@ -194,9 +194,9 @@ methods with **positional callbacks**, NOT `params.onComplite`:
 4. Push to main: `git push origin HEAD:main` (or `git push` if already on main).
 5. Wait for GitHub Pages propagation (usually 1–5 min) and confirm freshness
    (e.g. compare local/remote SHA with cache-busting query).
-6. Verify in Lampa (`bylampa.online`) after hard-reload.
+6. Verify in Lampa (`http://bylampa.online/`) after hard-reload.
 7. **Check functional behavior in Chrome via MCP browser tools** — open
-   `https://bylampa.online`, navigate to the changed feature, confirm it works
+  `http://bylampa.online/`, navigate to the changed feature, confirm it works
    as expected (click, keyboard nav, card open, etc.).
 8. For input/navigation changes, verify on real TV/STB remote (Back, arrows,
    Enter/OK), not only in desktop browser.

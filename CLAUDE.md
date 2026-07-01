@@ -31,4 +31,4 @@ git add -A && git commit -m "…"
 git push origin HEAD:main
 ```
 
-After deploy: verify in Chrome via MCP browser tools at `https://bylampa.online`.
+After deploy: verify in Chrome via MCP browser tools at `http://bylampa.online/`.

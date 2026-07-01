@@ -1,6 +1,6 @@
 ---
 name: "MediaSources Deploy Agent"
-description: "Use when: deploy plugin, commit and push to main, verify CDN propagation via curl, check cache-busting/hash, then run browser verification on bylampa.online; triggers: deploy, release, publish, push, post-push verification, subagent"
+description: "Use when: deploy plugin, commit and push to main, verify CDN propagation via curl, check cache-busting/hash, then run browser verification on http://bylampa.online/; triggers: deploy, release, publish, push, post-push verification, subagent"
 tools: [read, search, execute, web]
 argument-hint: "Describe what changed and what needs verification"
 user-invocable: true
@@ -24,7 +24,7 @@ Your job is to execute the deploy-and-verify workflow end to end.
    - fetch with cache-busting query,
    - compare content/hash local vs remote,
    - poll until fresh or report timeout.
-5. Only after CDN is fresh, run browser verification on `https://bylampa.online` for changed behavior.
+5. Only after CDN is fresh, run browser verification on `http://bylampa.online/` for changed behavior.
 6. Return a concise report with:
    - commit hash,
    - push status,

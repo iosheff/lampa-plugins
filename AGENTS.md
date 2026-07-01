@@ -28,7 +28,7 @@ Development policy: work only in the `main` branch. Do not create
 Deployed via GitHub Pages: `https://iosheff.github.io/lampa-plugins/mediasources.js`.  
 Propagation takes 1–5 min; hard-reload Lampa (Ctrl+Shift+R) or re-add the plugin.  
 After propagation, **verify functionality in Chrome via MCP browser tools** — open
-`https://bylampa.online` and exercise the changed feature.
+`http://bylampa.online/` and exercise the changed feature.
 
 ## Architecture
 
