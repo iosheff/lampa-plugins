@@ -759,6 +759,11 @@
             production_companies: [],   // Lampa reads .length without a guard
         };
 
+        // Lampa.Favorite.add() strips custom fields (incl. .genres) when saving
+        // "continue watching" history, but keeps .genre_ids — set it for cartoons
+        // so continueCardsForCat() can still recognize them after a re-read.
+        if (item.section === 14) card.genre_ids = [16];
+
         // method is computed by Lampa as original_name ? 'tv' : 'movie'
         if (serial) {
             card.filmix_is_serial   = true;
@@ -961,10 +966,63 @@
         return 'tv';   // s7
     }
 
-    function continueCardsForCat(cat) {
+    // Lampa.Favorite.add() (called internally on playback start) keeps only a
+    // fixed field whitelist — .genre_ids survives, .genres does not. A native
+    // TMDB full-card object only ever has .genres, so by the time we read a
+    // history/continues entry back, cartoon-genre membership is usually gone.
+    // Resolve it with a cached TMDB lookup by id when the card itself is silent.
+    function cartoonGenreCacheKey(id, serial) {
+        return 'gid:' + (serial ? 'tv' : 'mv') + ':' + id;
+    }
+
+    function resolveIsCartoon(card, cb) {
+        if (isCartoonHistoryCard(card)) { cb(true); return; }
+        // genre data present but didn't match → trust it, no need to look up.
+        if ((Array.isArray(card.genre_ids) && card.genre_ids.length) ||
+            (Array.isArray(card.genres)    && card.genres.length)) { cb(false); return; }
+        if (!card || !card.id) { cb(false); return; }
+
+        var serial = isCardSerial(card) || !!card.name;
+        var key    = cartoonGenreCacheKey(card.id, serial);
+        var hit    = _tmdbMeta[key];
+        if (hit && (nowMs() - hit.ts) < CACHE_TTL) { cb(!!hit.m); return; }
+
+        var k = tmdbKey();
+        if (!k || !Lampa.TMDB || !Lampa.TMDB.api) { cb(false); return; }
+
+        tmdbGet((serial ? 'tv/' : 'movie/') + card.id + '?api_key=' + k + '&language=ru',
+            function (d) {
+                var isCartoon = !!(d && Array.isArray(d.genres) &&
+                    d.genres.some(function (g) { return String(g && g.id) === '16'; }));
+                _tmdbMeta[key] = { m: isCartoon, ts: nowMs() };
+                scheduleSave();
+                cb(isCartoon);
+            },
+            function () { cb(false); },
+            function (d) { return d && d.id; }
+        );
+    }
+
+    // "Continue watching" row for a category page: s14 shows only cartoons,
+    // s0/s7 show everything except cartoons (cartoons get their own s14 row).
+    function continueCardsForCat(cat, cb) {
         var cards = continueCards(catToContinueType(cat));
-        if (cat !== 's14') return cards;
-        return cards.filter(isCartoonHistoryCard).slice(0, 19);
+        if (!cards.length) { cb(cards); return; }
+
+        var tasks = cards.map(function (card) {
+            return function (finish) {
+                resolveIsCartoon(card, function (isCartoon) {
+                    card.__filmix_is_cartoon = isCartoon;
+                    finish();
+                });
+            };
+        });
+        runLimited(tasks, 8, function () {
+            var out = cards.filter(function (c) {
+                return cat === 's14' ? c.__filmix_is_cartoon : !c.__filmix_is_cartoon;
+            });
+            cb(out.slice(0, 19));
+        });
     }
 
     function cleanCommentText(s) {
@@ -1516,12 +1574,13 @@
             function finish() {
                 var out = rows.filter(function (r) { return r && r.results && r.results.length; });
                 // "Continue watching" filtered by this category's type — first lane.
-                var cont = continueCardsForCat(cat);
-                var contRow = cont.length ? { title: L('filmix_lane_continue'), results: cont } : null;
-                if (!out.length && !contRow) { (onerror || function () {})(); return; }
-                var all = out.reduce(function (acc, r) { return acc.concat(r.results); }, []);
-                enrichCards(all, function () {
-                    oncomplite(contRow ? [contRow].concat(out) : out);
+                continueCardsForCat(cat, function (cont) {
+                    var contRow = cont.length ? { title: L('filmix_lane_continue'), results: cont } : null;
+                    if (!out.length && !contRow) { (onerror || function () {})(); return; }
+                    var all = out.reduce(function (acc, r) { return acc.concat(r.results); }, []);
+                    enrichCards(all, function () {
+                        oncomplite(contRow ? [contRow].concat(out) : out);
+                    });
                 });
             }
 

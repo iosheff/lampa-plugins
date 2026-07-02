@@ -33,9 +33,24 @@ Lampa shows the "more" element when `row.total_pages > 1`; clicking opens
 (drops viewed/thrown, filters by type) for category pages, and
 `Favorite.get({type:'history'})` minus viewed/thrown for the all-types home lane.
 
-Section → type: `s0`→movie, `s93`→anime, `s7`/`s14`→tv.
+Section → type: `s0`/`s14`→movie, `s93`→anime, `s7`→tv (`s14` cards are
+full-length cartoons, see `isSerial()`).
 
 History cards are already TMDB cards (from the redirect), so no enrichment/"more".
+
+**`Lampa.Favorite.add()` strips fields.** Confirmed empirically: when Lampa
+records "continue watching" on playback start, it keeps only a fixed field
+whitelist (`id, source, title, original_title, release_date, poster_path,
+img, vote_average, genre_ids, ...`) — `.genres` ({id,name} objects) is
+dropped, `.genre_ids` (plain number array) survives. A native TMDB full-card
+object only ever has `.genres`, never `.genre_ids`, so cartoon-genre
+membership is normally unrecoverable once an entry round-trips through
+history. `continueCardsForCat(cat, cb)` is therefore async: it resolves
+cartoon membership per card via `resolveIsCartoon()`, which trusts
+`genre_ids`/`genres` when present and otherwise falls back to a cached TMDB
+lookup by id. `convertCard()` also stamps `genre_ids:[16]` on Filmix `s14`
+cards up front so the fast (no-network) path covers our own cartoon cards.
+`s0`/`s7` rows exclude cartoons this way; `s14`'s row includes only them.
 
 > **Note:** Lampa only adds to history on **playback start**
 > (`Favorite.add('history', movie, 100)`), not on card open — so the lane is
