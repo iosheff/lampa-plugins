@@ -493,18 +493,21 @@
     }
 
     // TMDB credits → {cast, crew} with photos (profile_path)
+    // Lampa's person click (router.add('actor', ...)) reads data.id + data.source
+    // straight off this object — falling back to the *global* default source
+    // when source is missing, which opens the wrong person. Always stamp 'tmdb'.
     function tmdbPersons(det, serial) {
         var credits = (det && det.credits) || {};
         var cast = (credits.cast || []).map(function (c) {
-            return { id: c.id, name: c.name, character: c.character || '', profile_path: c.profile_path || '', url: '' };
+            return { id: c.id, source: 'tmdb', name: c.name, character: c.character || '', profile_path: c.profile_path || '', url: '' };
         });
         var crew = (credits.crew || []).map(function (c) {
-            return { id: c.id, name: c.name, job: c.job || '', profile_path: c.profile_path || '', url: '' };
+            return { id: c.id, source: 'tmdb', name: c.name, job: c.job || '', profile_path: c.profile_path || '', url: '' };
         });
         // series often have no directors in crew — use the creators instead
         if (serial && det && det.created_by) {
             det.created_by.forEach(function (p) {
-                crew.unshift({ id: p.id, name: p.name, job: 'Creator', profile_path: p.profile_path || '', url: '' });
+                crew.unshift({ id: p.id, source: 'tmdb', name: p.name, job: 'Creator', profile_path: p.profile_path || '', url: '' });
             });
         }
         return { cast: cast, crew: crew };
@@ -1738,16 +1741,22 @@
                     // runtime, date
                     if (data.duration) movie.runtime = data.duration;
 
-                    // persons
+                    // persons — Lampa's person click reads data.id + data.source
+                    // straight off these objects (falling back to the *global*
+                    // default source when missing, which opens the wrong person),
+                    // so stamp source: SOURCE_NAME to match found_actors' Filmix ids.
+                    // Filmix gives directors as plain name strings with no id at
+                    // all — leave id unset so the click cleanly no-ops instead of
+                    // resolving to an unrelated Filmix person by coincidence.
                     var cast = (data.found_actors || []).map(function (a) {
                         return {
-                            id: a.id, name: a.name,
+                            id: a.id, source: SOURCE_NAME, name: a.name,
                             original_name: a.original_name || '',
                             character: '', profile_path: '',
                         };
                     });
                     var crew = (data.directors || []).map(function (name) {
-                        return { name: name, job: 'Director', profile_path: '' };
+                        return { source: SOURCE_NAME, name: name, job: 'Director', profile_path: '' };
                     });
 
                     // series: season count, attach the playlist to the card
