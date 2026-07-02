@@ -494,7 +494,8 @@
 
     // TMDB trending → array of Lampa cards (source:'tmdb'), or null on failure.
     function fetchTrending(mediaType, done) {
-        tmdbGet('trending/' + mediaType + '/week?language=ru',
+        var key = tmdbKey();
+        tmdbGet('trending/' + mediaType + '/week?api_key=' + key + '&language=ru',
             function (d) {
                 var cards = ((d && d.results) || []).map(tmdbCard).filter(Boolean);
                 done(cards.length ? cards : null);
