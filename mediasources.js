@@ -492,6 +492,18 @@
         return card;
     }
 
+    // TMDB trending → array of Lampa cards (source:'tmdb'), or null on failure.
+    function fetchTrending(mediaType, done) {
+        tmdbGet('trending/' + mediaType + '/week?language=ru',
+            function (d) {
+                var cards = ((d && d.results) || []).map(tmdbCard).filter(Boolean);
+                done(cards.length ? cards : null);
+            },
+            function () { done(null); },
+            function (d) { return d && Array.isArray(d.results); }
+        );
+    }
+
     // TMDB credits → {cast, crew} with photos (profile_path)
     // Lampa's person click (router.add('actor', ...)) reads data.id + data.source
     // straight off this object — falling back to the *global* default source
@@ -1524,63 +1536,65 @@
                 { title: catTitle('s93'),                         cat: 's93', sort: 'date',   genres: 's93' },
             ];
 
-            // Place "Now watching" lanes under "New series episodes".
-            if (nowWatchingEnabled()) {
-                rows.splice(2, 0,
-                    { title: L('filmix_lane_now_movies'), section: 999, mode: 'popular' },
-                    { title: L('filmix_lane_now_series'), section: 7,   mode: 'popular' }
-                );
-            }
+            // "Now watching" (movies/series) — TMDB trending, fetched separately below.
+            var trendingLanes = nowWatchingEnabled()
+                ? [
+                    { title: L('filmix_lane_now_movies'), mediaType: 'movie' },
+                    { title: L('filmix_lane_now_series'), mediaType: 'tv'    },
+                ]
+                : [];
 
             var results = new Array(rows.length);
+            var trendingResults = new Array(trendingLanes.length);
             var done = 0;
+            var totalPending = rows.length + trendingLanes.length;
 
             function finish() {
                 var data = results.filter(function (r) { return r && r.results && r.results.length; });
+                var trendingRows = trendingResults.filter(function (r) { return r && r.results && r.results.length; });
                 // "Continue watching" from history (all types) — first lane, already TMDB cards.
                 var cont = continueCards(null);
                 var contRow = cont.length ? { title: L('filmix_lane_continue'), results: cont } : null;
-                if (!data.length && !contRow) { (onerror || function () {})(); return; }
-                // Enrich catalog cards with TMDB rating/poster (history cards already have it), then emit.
+                if (!data.length && !trendingRows.length && !contRow) { (onerror || function () {})(); return; }
+                // Enrich Filmix catalog cards with TMDB rating/poster (history + trending are already TMDB-native).
                 var all = data.reduce(function (acc, r) { return acc.concat(r.results); }, []);
                 enrichCards(all, function () {
-                    oncomplite(contRow ? [contRow].concat(data) : data);
+                    // Place "Now watching" lanes under "New series episodes".
+                    var merged = data.slice(0, 2).concat(trendingRows, data.slice(2));
+                    oncomplite(contRow ? [contRow].concat(merged) : merged);
                 });
             }
 
             rows.forEach(function (row, i) {
-                var reqUrl = row.mode === 'popular'
-                    ? popularUrl({ section: row.section, page: 1 })
-                    : catalogUrl({ cat: row.cat, sort: row.sort, page: 1 });
-
-                get(reqUrl,
+                get(catalogUrl({ cat: row.cat, sort: row.sort, page: 1 }),
                     function (data) {
                         if (Array.isArray(data) && data.length) {
-                            if (row.mode === 'popular') {
-                                results[i] = {
-                                    title:   row.title,
-                                    source:  SOURCE_NAME,
-                                    results: data.map(convertCard).filter(Boolean),
-                                };
-                            } else {
-                                results[i] = {
-                                    title:       row.title,
-                                    genres:      row.genres,                  // for onMore → category
-                                    sort:        row.sort,
-                                    url:         laneUrl(row.cat, row.sort),  // "more" → category_full
-                                    page:        1,
-                                    total_pages: 999,                         // >1 so the "more" element appears
-                                    source:      SOURCE_NAME,
-                                    results:     data.map(convertCard).filter(Boolean),
-                                };
-                            }
+                            results[i] = {
+                                title:       row.title,
+                                genres:      row.genres,                  // for onMore → category
+                                sort:        row.sort,
+                                url:         laneUrl(row.cat, row.sort),  // "more" → category_full
+                                page:        1,
+                                total_pages: 999,                         // >1 so the "more" element appears
+                                source:      SOURCE_NAME,
+                                results:     data.map(convertCard).filter(Boolean),
+                            };
                         }
-                        if (++done === rows.length) finish();
+                        if (++done === totalPending) finish();
                     },
                     function () {
-                        if (++done === rows.length) finish();
+                        if (++done === totalPending) finish();
                     }
                 );
+            });
+
+            trendingLanes.forEach(function (lane, i) {
+                fetchTrending(lane.mediaType, function (cards) {
+                    if (cards) {
+                        trendingResults[i] = { title: lane.title, source: 'tmdb', results: cards };
+                    }
+                    if (++done === totalPending) finish();
+                });
             });
 
             // no pagination on the home screen itself (each lane has its own "more")
@@ -1611,20 +1625,21 @@
                     { title: L('filmix_lane_new') + ' ' + name.toLowerCase(),  sort: 'year'   },
                     { title: L('filmix_lane_top') + ' ' + name.toLowerCase(),  sort: 'rating' },
                 ];
-                // Place "Now watching" under "New series".
+                // Place "Now watching" (TMDB trending) under "New series".
                 if (nowWatchingEnabled()) {
-                    lanes.splice(2, 0, { title: L('filmix_lane_now_series'), section: 7, mode: 'popular' });
+                    lanes.splice(2, 0, { title: L('filmix_lane_now_series'), mediaType: 'tv' });
                 }
             } else {
                 lanes = [
                     { title: L('filmix_lane_latest') + ' ' + name.toLowerCase(), sort: 'date'   },
                     { title: L('filmix_lane_top') + ' ' + name.toLowerCase(),    sort: 'rating' },
                 ];
-                // Place "Now watching" under "Latest".
+                // Place "Now watching" under "Latest". Cartoons stay on Filmix /popular
+                // (TMDB trending has no dedicated cartoon media type); movies use TMDB trending.
                 if (nowWatchingEnabled()) {
                     lanes.splice(1, 0, cat === 's14'
                         ? { title: L('filmix_lane_now_cartoons'), section: 14, mode: 'popular' }
-                        : { title: L('filmix_lane_now_movies'),   section: 999, mode: 'popular' }
+                        : { title: L('filmix_lane_now_movies'),   mediaType: 'movie' }
                     );
                 }
             }
@@ -1643,6 +1658,14 @@
             var rows = new Array(lanes.length);
             var done = 0;
             lanes.forEach(function (lane, i) {
+                if (lane.mediaType) {
+                    fetchTrending(lane.mediaType, function (cards) {
+                        if (cards) rows[i] = { title: lane.title, source: 'tmdb', results: cards };
+                        if (++done === lanes.length) finish();
+                    });
+                    return;
+                }
+
                 var laneCat = lane.cat || cat;
                 var reqUrl = lane.mode === 'popular'
                     ? popularUrl({ section: lane.section, page: 1 })
@@ -1682,7 +1705,9 @@
                 continueCardsForCat(cat, function (cont) {
                     var contRow = cont.length ? { title: L('filmix_lane_continue'), results: cont } : null;
                     if (!out.length && !contRow) { (onerror || function () {})(); return; }
-                    var all = out.reduce(function (acc, r) { return acc.concat(r.results); }, []);
+                    // Trending lanes are already TMDB-native — skip re-enrichment for those.
+                    var enrichable = out.filter(function (r) { return r.source !== 'tmdb'; });
+                    var all = enrichable.reduce(function (acc, r) { return acc.concat(r.results); }, []);
                     enrichCards(all, function () {
                         oncomplite(contRow ? [contRow].concat(out) : out);
                     });
