@@ -1450,6 +1450,41 @@
         } catch (ex) {}
     }
 
+    // Lampa's person click (router.add('actor', ...)) reads id + source
+    // straight off the clicked cast/crew object, falling back to the *global*
+    // default source (Storage.field('source')) only when it's missing. Native
+    // TMDB credits are raw TMDB API objects and never carry a .source field,
+    // so on any install where the default source isn't 'tmdb' — e.g. a user
+    // who set Filmix as their default browsing source — every actor/director
+    // click on a native TMDB full card resolves against the wrong provider
+    // and opens an unrelated person (same numeric id, different database).
+    // Stamp .source on the persons.cast/crew objects (mutated in place, the
+    // same references Lampa's Persons component reads when binding clicks)
+    // as soon as they're available, before that binding happens.
+    function fixFullPersonsSource(e) {
+        try {
+            var data = e && e.data;
+            var movieSource = data && data.movie && data.movie.source;
+            if (!movieSource || !data.persons) return;
+            ['cast', 'crew'].forEach(function (key) {
+                (data.persons[key] || []).forEach(function (p) {
+                    if (p && !p.source) p.source = movieSource;
+                });
+            });
+        } catch (ex) {}
+    }
+
+    function startPersonSourceFixWatcher() {
+        if (window.filmix_person_source_fix_started) return;
+        window.filmix_person_source_fix_started = true;
+
+        try {
+            Lampa.Listener.follow('full', function (e) {
+                if (e.type === 'start') fixFullPersonsSource(e);
+            });
+        } catch (ex) {}
+    }
+
     // The home title is built by a custom-home plugin as "Главная - filmix"
     // (lowercase source key), unlike core sections which uppercase it. Normalize
     // the visible header (and activity title) to the uppercase source name.
@@ -2223,6 +2258,7 @@
         loadMetaCache();
         startCommentsButtonWatcher();
         startEpisodeBadgeWatcher();
+        startPersonSourceFixWatcher();
 
         Lampa.Api.sources[SOURCE_NAME] = Source;
         Object.defineProperty(Lampa.Api.sources, SOURCE_NAME, {
