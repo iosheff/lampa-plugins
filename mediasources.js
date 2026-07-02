@@ -63,6 +63,9 @@
         filmix_now_lanes_name:    { en: 'Now watching lanes', ru: 'Ленты Сейчас смотрят' },
         filmix_now_lanes_desc:    { en: 'Show "Now watching" lanes on home and category pages.',
                         ru: 'Показывать ленты «Сейчас смотрят» на главной и в разделах.' },
+        filmix_episode_label_name:{ en: 'Episode label', ru: 'Лейбл серии' },
+        filmix_episode_label_desc:{ en: 'Show the latest released season/episode (e.g. S3E1) on series posters in lanes, under the quality label.',
+                        ru: 'Показывать последний вышедший сезон/серию (например, S3E1) на постерах сериалов в лентах, под лейблом качества.' },
         filmix_redirect_name:     { en: 'Open card in TMDB', ru: 'Открывать карточку в TMDB' },
         filmix_redirect_desc:     { en: 'List comes from Filmix, the card opens as a native TMDB card (reviews, seasons and episodes, recommendations). If there is no TMDB match — the Filmix card is shown.',
                                     ru: 'Список из Filmix, а карточка открывается как родная TMDB (отзывы, сезоны и серии, рекомендации). Если совпадения в TMDB нет — показывается карточка Filmix.' },
@@ -366,6 +369,11 @@
     // Show quality label on cards in lanes/lists (enabled by default)
     function qualityLabelEnabled() {
         return settingEnabled('filmix_quality_label', true);
+    }
+
+    // Show the "S<season>E<episode>" badge on series posters (enabled by default)
+    function episodeLabelEnabled() {
+        return settingEnabled('filmix_episode_label', true);
     }
 
     // Redirect mode: open the native TMDB card on click (enabled by default)
@@ -726,6 +734,19 @@
         return m ? m[1] : '';
     }
 
+    // Formats the latest released episode as "S<season>E<episode>" for the
+    // lane poster badge. item.last_episode.episode is often a translated
+    // range ("5-9") — use the highest (most recently released) number.
+    function episodeLabel(lastEpisode) {
+        if (!lastEpisode) return '';
+        var season = parseInt(lastEpisode.season, 10);
+        var epStr  = String(lastEpisode.episode || '');
+        var nums   = epStr.match(/\d+/g);
+        if (!season || !nums || !nums.length) return '';
+        var episode = Math.max.apply(null, nums.map(Number));
+        return 'S' + season + 'E' + episode;
+    }
+
     function convertCard(item) {
         if (!item) return null;
 
@@ -777,6 +798,7 @@
             card.title          = t_title || t_orig;
             card.first_air_date = year ? year + '-01-01' : '';
             card.number_of_seasons = 1;
+            card.filmix_episode_label = episodeLabelEnabled() ? episodeLabel(item.last_episode) : '';
         } else {
             card.title          = t_title || t_orig;
             card.original_title = t_orig  || t_title;
@@ -1378,6 +1400,51 @@
         // Minimal fallback interval for tab-switch re-renders that don't fire
         // a new 'full' event (Lampa reuses the existing component instance).
         setInterval(tryInjectCommentsButton, 3000);
+    }
+
+    // Injects "S<season>E<episode>" onto series poster cards, directly under
+    // the quality label. Lampa's card template has no such badge, so we hook
+    // the 'line' event (fired on every lane/list render) and append a custom
+    // element into '.card__view' for our own (source === filmix) serial cards.
+    var EPISODE_BADGE_CSS =
+        '.filmix-episode-badge{position:absolute;left:-0.8em;bottom:1em;' +
+        'padding:0.4em;background:rgba(0,0,0,.6);color:#fff;font-size:0.8em;' +
+        'border-radius:0.3em;z-index:1;}';
+
+    function injectEpisodeBadgeStyle() {
+        if (document.getElementById('filmix-episode-badge-style')) return;
+        var style = document.createElement('style');
+        style.id = 'filmix-episode-badge-style';
+        style.textContent = EPISODE_BADGE_CSS;
+        document.head.appendChild(style);
+    }
+
+    function addEpisodeBadge(item) {
+        var data = item && item.data;
+        if (!data || data.source !== SOURCE_NAME || !data.filmix_episode_label) return;
+        var $el = item.render && item.render();
+        var el  = $el && $el[0];
+        if (!el || el.querySelector('.filmix-episode-badge')) return;
+        var view = el.querySelector('.card__view');
+        if (!view) return;
+        var badge = document.createElement('div');
+        badge.className   = 'filmix-episode-badge';
+        badge.textContent = data.filmix_episode_label;
+        view.appendChild(badge);
+    }
+
+    function startEpisodeBadgeWatcher() {
+        if (window.filmix_episode_badge_watcher_started) return;
+        window.filmix_episode_badge_watcher_started = true;
+
+        injectEpisodeBadgeStyle();
+
+        try {
+            Lampa.Listener.follow('line', function (e) {
+                if (e.type !== 'append') return;
+                (e.items || []).forEach(addEpisodeBadge);
+            });
+        } catch (ex) {}
     }
 
     // The home title is built by a custom-home plugin as "Главная - filmix"
@@ -2016,6 +2083,20 @@
             },
         });
 
+        // Episode label ("S3E1") on series poster cards toggle
+        Lampa.SettingsApi.addParam({
+            component: SETTINGS_COMPONENT,
+            param: {
+                name:      'filmix_episode_label',
+                type:      'trigger',
+                'default': true,
+            },
+            field: {
+                name:        L('filmix_episode_label_name'),
+                description: L('filmix_episode_label_desc'),
+            },
+        });
+
         // "Now watching" lanes toggle
         Lampa.SettingsApi.addParam({
             component: SETTINGS_COMPONENT,
@@ -2132,6 +2213,7 @@
         registerLang();
         loadMetaCache();
         startCommentsButtonWatcher();
+        startEpisodeBadgeWatcher();
 
         Lampa.Api.sources[SOURCE_NAME] = Source;
         Object.defineProperty(Lampa.Api.sources, SOURCE_NAME, {
